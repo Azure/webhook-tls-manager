@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <testsuite name="KeyPool Test Suite" tests="6" failures="0" errors="0" time="0.124">
+      <testcase name="key pool BlockUntilCount key count achieved 1/1" classname="KeyPool Test Suite" time="0.003442677"></testcase>
+      <testcase name="key pool BlockUntilCount key count achieved 0/0" classname="KeyPool Test Suite" time="7.9567e-05"></testcase>
+      <testcase name="key pool BlockUntilCount key count achieved 1/2" classname="KeyPool Test Suite" time="2.1912e-05"></testcase>
+      <testcase name="key pool BlockUntilCount key count not achieved DeadlineExceeded 1/3" classname="KeyPool Test Suite" time="0.060419865"></testcase>
+      <testcase name="key pool BlockUntilCount key count count over capacity with full pool" classname="KeyPool Test Suite" time="8.124e-05"></testcase>
+      <testcase name="key pool BlockUntilCount key count count over capacity with pool not full" classname="KeyPool Test Suite" time="0.060162014"></testcase>
+  </testsuite>
