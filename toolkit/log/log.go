@@ -8,10 +8,13 @@ import (
 )
 
 const (
-	loggerKey             = "web-tls-manager"
 	upperCaseAlphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 	epochFieldName        = "env_epoch"
 )
+
+type loggerKeyType string
+
+const loggerKey loggerKeyType = "web-tls-manager"
 
 func WithLogger(ctx context.Context, logger *logrus.Entry) context.Context {
 	return context.WithValue(ctx, loggerKey, logger)

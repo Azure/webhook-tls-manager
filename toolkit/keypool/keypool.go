@@ -2,6 +2,7 @@ package keypool
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
 	"errors"
 	"fmt"
@@ -17,19 +18,31 @@ const KeySize = 4096
 var workerTickerInterval = time.Second * 5
 var ErrEmptyPool = errors.New("key pool is empty")
 
+type keyGeneratorImp struct{}
+
+func NewKeyGenerator() KeyGenerator {
+	return &keyGeneratorImp{}
+}
+
+func (k *keyGeneratorImp) GenerateKey(length int) (*rsa.PrivateKey, error) {
+	return rsa.GenerateKey(rand.Reader, length)
+}
+
 type KeyPool struct {
 	workerNumber   int64
 	maxConcurrency func() int64
 	pool           chan *rsa.PrivateKey
+	keyGenerator   KeyGenerator
 }
 
 func (k *KeyPool) CurrentSize() int { return len(k.pool) }
 
 func NewKeyPool(maxPoolSize int,
-	maxConcurrency func() int64) *KeyPool {
+	maxConcurrency func() int64, keyGenerator KeyGenerator) *KeyPool {
 	return &KeyPool{
 		pool:           make(chan *rsa.PrivateKey, maxPoolSize),
 		maxConcurrency: maxConcurrency,
+		keyGenerator:   keyGenerator,
 	}
 }
 
@@ -87,7 +100,7 @@ func (k *KeyPool) GenerateSingleKey(ctx context.Context, logger logrus.Entry) (*
 
 	keySizeInUse := KeySize
 
-	privateKey, err := GenerateKey(keySizeInUse)
+	privateKey, err := k.keyGenerator.GenerateKey(keySizeInUse)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +181,7 @@ func (k *KeyPool) keyGenerationLoop(ctx context.Context, logger logrus.Entry, lo
 
 		keySizeInUse := KeySize
 
-		privateKey, err := GenerateKey(keySizeInUse)
+		privateKey, err := k.keyGenerator.GenerateKey(keySizeInUse)
 		if err != nil {
 			logger.Errorf("[keypool loop %d] error generating key for pool: %v", loopID, err)
 			time.Sleep(time.Millisecond * 50) // Wait a bit to prevent possible tightloop

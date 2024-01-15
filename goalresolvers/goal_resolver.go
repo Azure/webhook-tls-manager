@@ -8,6 +8,7 @@ import (
 
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
+	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certgenerator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certoperator"
 	"github.com/Azure/webhook-tls-manager/toolkit/keypool"
@@ -87,7 +88,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 
 	caCert, caCertPem, caKey, caKeyPem, rerr := g.certOperator.CreateSelfSignedCertificateKeyPair(ctx, caCsr)
 	if rerr != nil {
-		logger.Errorf("generateOverlayVpaCertificates generate ca certs and key failed: %s", rerr)
+		logger.Errorf("generateOverlayVpaCertificates generate ca certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
@@ -107,7 +108,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 
 	serverCertPem, serverKeyPem, rerr := g.certOperator.CreateCertificateKeyPair(ctx, serverCsr, caCert, caKey)
 	if rerr != nil {
-		logger.Errorf("generateOverlayVpaCertificates generate server certs and key failed: %s", rerr)
+		logger.Errorf("generateOverlayVpaCertificates generate server certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
@@ -123,7 +124,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsVPAEnabled bool) WebhookTlsManagerGoalResolverInterface {
 	logger := log.MustGetLogger(ctx)
 	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsVPAEnabled=%v", isKubeSystemNamespaceBlocked, IsVPAEnabled)
-	kp := keypool.NewKeyPool(2, func() int64 { return int64(1) })
+	kp := keypool.NewKeyPool(2, func() int64 { return int64(1) }, keypool.NewKeyGenerator())
 	timeout := 20 * time.Second
 	entryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -131,7 +132,7 @@ func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes
 	if err != nil {
 		logger.Warningf("keypool block until count fails. error: %s", err)
 	}
-	generator := certgenerator.NewCertGenerator(*kp)
+	generator := certgenerator.NewCertGenerator(kp, certcreator.NewCertCreator())
 	operator := certoperator.NewCertOperator(generator)
 	return &webhookTlsManagerGoalResolver{
 		certOperator:                 operator,
@@ -151,7 +152,7 @@ func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTl
 
 	rotateCert, cerr := g.shouldRotateCert(ctx)
 	if cerr != nil {
-		logger.Errorf("Failed to check cert expiration date. error: %s", cerr)
+		logger.Errorf("Failed to check cert expiration date. error: %s", *cerr)
 		return nil, cerr
 	}
 	if !rotateCert {
@@ -160,7 +161,7 @@ func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTl
 	} else {
 		data, cerr := g.generateOverlayVpaCertificates(ctx)
 		if cerr != nil {
-			logger.Errorf("generateOverlayVpaCertificates. error: %s", cerr)
+			logger.Errorf("generateOverlayVpaCertificates. error: %s", *cerr)
 			return nil, cerr
 		}
 		goal.CertData = data

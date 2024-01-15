@@ -1,5 +1,7 @@
 package certcreator
 
+//go:generate mockgen -destination=mock_cert_creator/cert_creator.go -package=mock_cert_creator github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator CertCreator
+
 import (
 	"context"
 	"crypto/rsa"

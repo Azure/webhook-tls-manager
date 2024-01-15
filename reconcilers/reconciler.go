@@ -14,6 +14,7 @@ import (
 
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/goalresolvers"
+	"github.com/Azure/webhook-tls-manager/metrics"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
 )
 
@@ -68,7 +69,7 @@ func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, d
 		logger.Infof("create secret %s", consts.SecretName)
 		cerr := createVpaTlsSecret(ctx, clientset, data)
 		if cerr != nil {
-			logger.Errorf("fail to create secret %s. error: %s", consts.SecretName, cerr)
+			logger.Errorf("fail to create secret %s. error: %s", consts.SecretName, *cerr)
 			return cerr
 		}
 		return nil
@@ -82,7 +83,7 @@ func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, d
 	// Label has been checked in the goal resolver
 	cerr := updateVpaTlsSecret(ctx, clientset, data, secret)
 	if cerr != nil {
-		logger.Errorf("fail to update secret %s. error: %s", consts.SecretName, cerr)
+		logger.Errorf("fail to update secret %s. error: %s", consts.SecretName, *cerr)
 		return cerr
 	}
 	return nil
@@ -103,7 +104,7 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 		logger.Infof("mutating webhook configuration %s doesn't exist", consts.WebhookConfigName)
 		cerr := createMutatingWebhookConfig(ctx, clientset, secret.Data["caCert.pem"], isKubeSystemNamespaceBlocked)
 		if cerr != nil {
-			logger.Errorf("Create overlay vpa mutating webhook configuration failed. error: %s", cerr)
+			logger.Errorf("Create overlay vpa mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
 		logger.Info(ctx, "Create overlay vpa mutating webhook configuration succeed.")
@@ -128,7 +129,7 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 	if shouldUpdate {
 		cerr = updateMutatingWebhookConfig(ctx, clientset, isKubeSystemNamespaceBlocked, secret.Data["caCert.pem"])
 		if cerr != nil {
-			logger.Errorf("Update overlay vpa mutating webhook configuration failed. error: %s", cerr)
+			logger.Errorf("Update overlay vpa mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
 		logger.Info(ctx, "Update overlay vpa mutating webhook configuration succeed.")
@@ -320,14 +321,14 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 
 	goal, cerr := r.webhookTlsManagerGoalResolver.Resolve(ctx)
 	if cerr != nil {
-		logger.Errorf("Resolve overlay vpa webhook goal failed. error: %s", cerr)
+		logger.Errorf("Resolve overlay vpa webhook goal failed. error: %s", *cerr)
 		return cerr
 	}
 
 	if !goal.IsVPAEnabled {
 		cerr = cleanupSecretAndWebhook(ctx, r.kubeClient)
 		if cerr != nil {
-			logger.Errorf("cleanupSecretAndWebhook error: %s", cerr)
+			logger.Errorf("cleanupSecretAndWebhook error: %s", *cerr)
 			return cerr
 		}
 		logger.Info(ctx, "VPA is disabled. cleanup succeed.")
@@ -336,19 +337,19 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 
 	// Rotate certificates.
 	if goal.CertData != nil {
-		// metrics.RotateCertificateMetric.Set(1)
+		metrics.RotateCertificateMetric.Set(1)
 		cerr = createOrUpdateSecret(ctx, r.kubeClient, *goal.CertData)
 		if cerr != nil {
-			logger.Errorf("createOrUpdateSecret failed. error: %s", cerr)
+			logger.Errorf("createOrUpdateSecret failed. error: %s", *cerr)
 			return cerr
 		}
 	} else {
-		// metrics.RotateCertificateMetric.Set(0)
+		metrics.RotateCertificateMetric.Set(0)
 	}
 
 	cerr = createOrUpdateWebhook(ctx, r.kubeClient, goal.IsKubeSystemNamespaceBlocked)
 	if cerr != nil {
-		logger.Errorf("createOrUpdateWebhook failed. error: %s", cerr)
+		logger.Errorf("createOrUpdateWebhook failed. error: %s", *cerr)
 		return cerr
 	}
 
@@ -372,7 +373,7 @@ func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 			logger.Info(ctx, "Reconcile overlay vpa webhook succeed.")
 			return nil
 		}
-		logger.Errorf("reconcileOnce failed. error: %s", cerr)
+		logger.Errorf("reconcileOnce failed. error: %s", *cerr)
 		time.Sleep(retryInterval)
 	}
 	logger.Error("Reconcile overlay vpa webhook succeed.")

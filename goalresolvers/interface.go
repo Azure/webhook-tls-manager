@@ -1,6 +1,6 @@
 package goalresolvers
 
-//go:generate sh -c "mockgen go.goms.io/aks/rp/ccp/overlay-vpa-webhook-generation/goalresolvers OverlayVpaWebhookGoalResolverInterface >./mock_$GOPACKAGE/goal_resolver_interface.go"
+//go:generate mockgen -destination=mock_goal_resolvers/goal_resolver.go -package=mock_goal_resolvers github.com/Azure/webhook-tls-manager/goalresolvers WebhookTlsManagerGoalResolverInterface
 
 import (
 	"context"

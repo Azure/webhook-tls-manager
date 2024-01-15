@@ -1,9 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
-  <testsuite name="KeyPool Test Suite" tests="6" failures="0" errors="0" time="0.124">
-      <testcase name="key pool BlockUntilCount key count achieved 1/1" classname="KeyPool Test Suite" time="0.003442677"></testcase>
-      <testcase name="key pool BlockUntilCount key count achieved 0/0" classname="KeyPool Test Suite" time="7.9567e-05"></testcase>
-      <testcase name="key pool BlockUntilCount key count achieved 1/2" classname="KeyPool Test Suite" time="2.1912e-05"></testcase>
-      <testcase name="key pool BlockUntilCount key count not achieved DeadlineExceeded 1/3" classname="KeyPool Test Suite" time="0.060419865"></testcase>
-      <testcase name="key pool BlockUntilCount key count count over capacity with full pool" classname="KeyPool Test Suite" time="8.124e-05"></testcase>
-      <testcase name="key pool BlockUntilCount key count count over capacity with pool not full" classname="KeyPool Test Suite" time="0.060162014"></testcase>
+  <testsuite name="KeyPool Test Suite" tests="1" failures="0" errors="0" time="5.139">
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when should eventually return the fake generated key should eventually return the fake generated key" classname="KeyPool Test Suite" time="5.139040283"></testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when loop isn&#39;t running should return ErrEmptyPool" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when loop isn&#39;t running should return succeed if GenerateKey succeeds" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when loop isn&#39;t running should return error if GenerateKey fails" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when genfunc panics should recover" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when genfunc returns an error should recover" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when given a fake key generation function when configured for one worker, one key when the context is canceled should stop all worker routines" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when configured for 2 workers, 3 keys should eventually return three distinct keys [slow]" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool when configured for 2 workers, 3 keys Worker number should increase &amp; drop" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count achieved 1/1" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count achieved 0/0" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count achieved 1/2" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count not achieved DeadlineExceeded 1/3" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count count over capacity with full pool" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
+      <testcase name="key pool BlockUntilCount key count count over capacity with pool not full" classname="KeyPool Test Suite" time="0">
+          <skipped></skipped>
+      </testcase>
   </testsuite>

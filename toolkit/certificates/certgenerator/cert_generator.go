@@ -33,14 +33,14 @@ const (
 )
 
 type certificateGeneratorImp struct {
-	keypool     keypool.KeyPool
+	keypool     keypool.Interface
 	certCreator certcreator.CertCreator
 }
 
-func NewCertGenerator(keypool keypool.KeyPool) CertGenerator {
+func NewCertGenerator(keypool keypool.Interface, certCreator certcreator.CertCreator) CertGenerator {
 	return &certificateGeneratorImp{
 		keypool:     keypool,
-		certCreator: certcreator.NewCertCreator(),
+		certCreator: certCreator,
 	}
 }
 
@@ -113,20 +113,19 @@ func (c *certificateGeneratorImp) ensureHasKey(
 
 		count := 0
 
-		var res *rsa.PrivateKey
 		var err error
 		for count <= KeyRetryCount {
 			privateKey, err = c.keypool.GenerateSingleKey(ctx, *logger)
+			count++
 			if err != nil {
 				logger.Errorf("one time GenerateSingleKey failed: %s", err)
-				count++
 			} else {
-				res = privateKey
+				break
 			}
 			time.Sleep(KeyRetryTimeout)
 		}
 
-		if res != nil {
+		if err != nil {
 			var errMsg string
 			if count == KeyRetryCount {
 				errMsg = fmt.Sprintf("tried %d times GenerateSingleKey, but failed: %s", KeyRetryCount, err)
