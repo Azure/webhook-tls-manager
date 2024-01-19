@@ -1,21 +1,28 @@
-# syntax=docker/dockerfile:1
+FROM golang:1.21 AS build-stage
 
-FROM golang:1.21
+WORKDIR /gomod
+COPY go.mod go.sum ./
+RUN go mod download
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
-RUN go mod download
-
 COPY . .
 
-RUN go build -o /webhook-tls-manager
+RUN CGO_ENABLED=0 go build -o webhook-tls-manager main.go
 
-# Set execute permission on the binary
-RUN chmod +x /webhook-tls-manager
+FROM scratch
+COPY --from=build-stage /app/webhook-tls-manager /
 
-# FROM golang:1.20 AS build-stage
+ENTRYPOINT ["/webhook-tls-manager"]
+
+
+# RUN go build -o /webhook-tls-manager
+
+# RUN chmod +x /webhook-tls-manager
+
+# ENTRYPOINT ["/webhook-tls-manager"]
+
+# FROM golang:1.21 AS build-stage
 
 # WORKDIR /gomod
 # COPY go.mod go.sum ./
@@ -34,4 +41,3 @@ RUN chmod +x /webhook-tls-manager
 
 # USER nonroot:nonroot
 
-ENTRYPOINT ["/webhook-tls-manager"]
