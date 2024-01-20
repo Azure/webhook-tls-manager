@@ -11,7 +11,6 @@ import (
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certgenerator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certoperator"
-	"github.com/Azure/webhook-tls-manager/toolkit/keypool"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -124,15 +123,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsVPAEnabled bool) WebhookTlsManagerGoalResolverInterface {
 	logger := log.MustGetLogger(ctx)
 	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsVPAEnabled=%v", isKubeSystemNamespaceBlocked, IsVPAEnabled)
-	kp := keypool.NewKeyPool(2, func() int64 { return int64(1) }, keypool.NewKeyGenerator())
-	timeout := 20 * time.Second
-	entryCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	err := kp.BlockUntilCount(entryCtx, *logger, 2)
-	if err != nil {
-		logger.Warningf("keypool block until count fails. error: %s", err)
-	}
-	generator := certgenerator.NewCertGenerator(kp, certcreator.NewCertCreator())
+	generator := certgenerator.NewCertGenerator(certcreator.NewCertCreator())
 	operator := certoperator.NewCertOperator(generator)
 	return &webhookTlsManagerGoalResolver{
 		certOperator:                 operator,

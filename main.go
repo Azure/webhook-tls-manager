@@ -1,4 +1,4 @@
-package webhooktlsmanager
+package main
 
 import (
 	"context"

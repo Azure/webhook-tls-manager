@@ -2,15 +2,14 @@ package certgenerator
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
 	"time"
 
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator"
-	"github.com/Azure/webhook-tls-manager/toolkit/keypool"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
-	"github.com/sirupsen/logrus"
 	"k8s.io/legacy-cloud-providers/azure/retry"
 )
 
@@ -30,16 +29,15 @@ const (
 	KeyRetryCount    = 3
 	KeyRetryInterval = time.Microsecond * 5
 	KeyRetryTimeout  = time.Second * 10
+	KeySize          = 4096
 )
 
 type certificateGeneratorImp struct {
-	keypool     keypool.Interface
 	certCreator certcreator.CertCreator
 }
 
-func NewCertGenerator(keypool keypool.Interface, certCreator certcreator.CertCreator) CertGenerator {
+func NewCertGenerator(certCreator certcreator.CertCreator) CertGenerator {
 	return &certificateGeneratorImp{
-		keypool:     keypool,
 		certCreator: certCreator,
 	}
 }
@@ -51,9 +49,10 @@ func (c *certificateGeneratorImp) CreateSelfSignedCertificateKeyPair(ctx context
 
 	logger := log.MustGetLogger(ctx)
 
-	privateKey, err := c.ensureHasKey(ctx, logger)
+	privateKey, err := rsa.GenerateKey(rand.Reader, KeySize)
+	// privateKey, err := c.ensureHasKey(ctx, logger)
 	if err != nil {
-		logger.Errorf("ensure Key failed: %s", err)
+		logger.Errorf("rsa.GenerateKeyfailed: %s", err)
 		return nil, nil, retry.NewError(true, err)
 	}
 
@@ -73,9 +72,9 @@ func (c *certificateGeneratorImp) CreateCertificateKeyPair(ctx context.Context, 
 
 	logger := log.MustGetLogger(ctx)
 
-	privateKey, err := c.ensureHasKey(ctx, logger)
+	privateKey, err := rsa.GenerateKey(rand.Reader, KeySize)
 	if err != nil {
-		logger.Errorf("ensureKey failed: %s", err)
+		logger.Errorf("rsa.GenerateKey failed: %s", err)
 		return nil, nil, retry.NewError(true, err)
 	}
 
@@ -97,45 +96,4 @@ func (c *certificateGeneratorImp) CreateCertificate(ctx context.Context, csr *x5
 	}
 
 	return c.certCreator.CreateCertificateWithPublicKey(ctx, csr, &privateKey.PublicKey, caCert, caKey)
-}
-
-func (c *certificateGeneratorImp) ensureHasKey(
-	ctx context.Context,
-	logger *logrus.Entry) (*rsa.PrivateKey, error) {
-	privateKey, err := c.keypool.GetKey(ctx, *logger)
-	if err != nil {
-		// Whatever it is an empty pool or not, we call GenerateSingleKey directly and apply a fixed type retry.
-		// If GenerateSingleKey succeeds, then return the key.
-		// If retrying GenerateSingleKey fails, then return error.
-		if c.keypool.CurrentSize() != 0 {
-			logger.Errorf("GetKey failed: %s even keypool is not empty", err)
-		}
-
-		count := 0
-
-		var err error
-		for count <= KeyRetryCount {
-			privateKey, err = c.keypool.GenerateSingleKey(ctx, *logger)
-			count++
-			if err != nil {
-				logger.Errorf("one time GenerateSingleKey failed: %s", err)
-			} else {
-				break
-			}
-			time.Sleep(KeyRetryTimeout)
-		}
-
-		if err != nil {
-			var errMsg string
-			if count == KeyRetryCount {
-				errMsg = fmt.Sprintf("tried %d times GenerateSingleKey, but failed: %s", KeyRetryCount, err)
-			} else {
-				errMsg = fmt.Sprintf("tried %d times GenerateSingleKey, timeout %d seconds. Failed: %s", count, int(KeyRetryTimeout.Seconds()), err)
-			}
-			logger.Errorf(errMsg)
-			return nil, fmt.Errorf(errMsg)
-		}
-	}
-
-	return privateKey, nil
 }

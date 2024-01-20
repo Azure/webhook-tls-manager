@@ -2,19 +2,12 @@ package goalresolvers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
-	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator"
-	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certgenerator"
-	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certoperator"
-	"github.com/Azure/webhook-tls-manager/toolkit/keypool"
-	"github.com/Azure/webhook-tls-manager/toolkit/keypool/mock_key_generator"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -108,17 +101,6 @@ var _ = Describe("generateVpaCertificates", func() {
 		fakeClientset = fake.NewSimpleClientset()
 	})
 
-	It("fails", func() {
-		mockCtrl := gomock.NewController(GinkgoT())
-		keyGenerator := mock_key_generator.NewMockKeyGenerator(mockCtrl)
-		keyGenerator.EXPECT().GenerateKey(gomock.Any()).Return(nil, errors.New("generateKey error")).AnyTimes()
-		kp := keypool.NewKeyPool(1, func() int64 { return int64(1) }, keyGenerator)
-		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
-		g.certOperator = certoperator.NewCertOperator(certgenerator.NewCertGenerator(kp, certcreator.NewCertCreator()))
-		_, err := g.generateOverlayVpaCertificates(ctx)
-		Expect(err).Error()
-	})
-
 	It("succeed", func() {
 		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		data, err := g.generateOverlayVpaCertificates(ctx)
@@ -170,19 +152,6 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 		goal, cerr := resolver.Resolve(ctx)
 		Expect(cerr).To(BeNil())
 		Expect(goal.CertData).NotTo(BeNil())
-	})
-
-	It("resolve fails: key pool generator error", func() {
-		fakeClientset = fake.NewSimpleClientset()
-		mockCtrl := gomock.NewController(GinkgoT())
-		keyGenerator := mock_key_generator.NewMockKeyGenerator(mockCtrl)
-		keyGenerator.EXPECT().GenerateKey(gomock.Any()).Return(nil, errors.New("generateKey error")).AnyTimes()
-		kp := keypool.NewKeyPool(1, func() int64 { return int64(1) }, keyGenerator)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
-		resolver.certOperator = certoperator.NewCertOperator(certgenerator.NewCertGenerator(kp, certcreator.NewCertCreator()))
-		goal, cerr := resolver.Resolve(ctx)
-		Expect(goal).To(BeNil())
-		Expect(cerr).Error()
 	})
 })
 
