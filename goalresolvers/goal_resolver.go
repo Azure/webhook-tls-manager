@@ -28,14 +28,14 @@ type CertificateData struct {
 type WebhookTlsManagerGoal struct {
 	CertData                     *CertificateData
 	IsKubeSystemNamespaceBlocked bool
-	IsVPAEnabled                 bool
+	IsWebhookTlsManagerEnabled   bool
 }
 
 type webhookTlsManagerGoalResolver struct {
 	certOperator                 certoperator.CertOperator
 	kubeClient                   kubernetes.Interface
 	isKubeSystemNamespaceBlocked bool
-	IsVPAEnabled                 bool
+	IsWebhookTlsManagerEnabled   bool
 }
 
 func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (bool, *error) {
@@ -70,7 +70,7 @@ func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (b
 	return false, nil
 }
 
-func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx context.Context) (*CertificateData, *error) {
+func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context) (*CertificateData, *error) {
 	logger := log.MustGetLogger(ctx)
 	now := time.Now().UTC()
 	notBefore := now.Add(-certificates.ClockSkewDuration)
@@ -87,7 +87,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 
 	caCert, caCertPem, caKey, caKeyPem, rerr := g.certOperator.CreateSelfSignedCertificateKeyPair(ctx, caCsr)
 	if rerr != nil {
-		logger.Errorf("generateOverlayVpaCertificates generate ca certs and key failed: %s", rerr.Error())
+		logger.Errorf("generateCertificates generate ca certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
@@ -107,7 +107,7 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 
 	serverCertPem, serverKeyPem, rerr := g.certOperator.CreateCertificateKeyPair(ctx, serverCsr, caCert, caKey)
 	if rerr != nil {
-		logger.Errorf("generateOverlayVpaCertificates generate server certs and key failed: %s", rerr.Error())
+		logger.Errorf("generateCertificates generate server certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
@@ -120,25 +120,25 @@ func (g *webhookTlsManagerGoalResolver) generateOverlayVpaCertificates(ctx conte
 	}, nil
 }
 
-func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsVPAEnabled bool) WebhookTlsManagerGoalResolverInterface {
+func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsWebhookTlsManagerEnabled bool) WebhookTlsManagerGoalResolverInterface {
 	logger := log.MustGetLogger(ctx)
-	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsVPAEnabled=%v", isKubeSystemNamespaceBlocked, IsVPAEnabled)
+	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", isKubeSystemNamespaceBlocked, IsWebhookTlsManagerEnabled)
 	generator := certgenerator.NewCertGenerator(certcreator.NewCertCreator())
 	operator := certoperator.NewCertOperator(generator)
 	return &webhookTlsManagerGoalResolver{
 		certOperator:                 operator,
 		kubeClient:                   kubeClient,
 		isKubeSystemNamespaceBlocked: isKubeSystemNamespaceBlocked,
-		IsVPAEnabled:                 IsVPAEnabled,
+		IsWebhookTlsManagerEnabled:   IsWebhookTlsManagerEnabled,
 	}
 }
 
 func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTlsManagerGoal, *error) {
 	logger := log.MustGetLogger(ctx)
-	logger.Infof("Resolve: isKubeSystemNamespaceBlocked=%v, IsVPAEnabled=%v", g.isKubeSystemNamespaceBlocked, g.IsVPAEnabled)
+	logger.Infof("Resolve: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", g.isKubeSystemNamespaceBlocked, g.IsWebhookTlsManagerEnabled)
 	goal := &WebhookTlsManagerGoal{
 		IsKubeSystemNamespaceBlocked: g.isKubeSystemNamespaceBlocked,
-		IsVPAEnabled:                 g.IsVPAEnabled,
+		IsWebhookTlsManagerEnabled:   g.IsWebhookTlsManagerEnabled,
 	}
 
 	rotateCert, cerr := g.shouldRotateCert(ctx)
@@ -150,9 +150,9 @@ func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTl
 		logger.Info("no need to rotate cert.")
 		goal.CertData = nil
 	} else {
-		data, cerr := g.generateOverlayVpaCertificates(ctx)
+		data, cerr := g.generateCertificates(ctx)
 		if cerr != nil {
-			logger.Errorf("generateOverlayVpaCertificates. error: %s", *cerr)
+			logger.Errorf("generateCertificates. error: %s", *cerr)
 			return nil, cerr
 		}
 		goal.CertData = data

@@ -67,7 +67,7 @@ func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, d
 
 	if k8serrors.IsNotFound(getErr) {
 		logger.Infof("create secret %s", consts.SecretName)
-		cerr := createVpaTlsSecret(ctx, clientset, data)
+		cerr := createTlsSecret(ctx, clientset, data)
 		if cerr != nil {
 			logger.Errorf("fail to create secret %s. error: %s", consts.SecretName, *cerr)
 			return cerr
@@ -81,7 +81,7 @@ func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, d
 	}
 
 	// Label has been checked in the goal resolver
-	cerr := updateVpaTlsSecret(ctx, clientset, data, secret)
+	cerr := updateTlsSecret(ctx, clientset, data, secret)
 	if cerr != nil {
 		logger.Errorf("fail to update secret %s. error: %s", consts.SecretName, *cerr)
 		return cerr
@@ -104,10 +104,10 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 		logger.Infof("mutating webhook configuration %s doesn't exist", consts.WebhookConfigName)
 		cerr := createMutatingWebhookConfig(ctx, clientset, secret.Data["caCert.pem"], isKubeSystemNamespaceBlocked)
 		if cerr != nil {
-			logger.Errorf("Create overlay vpa mutating webhook configuration failed. error: %s", *cerr)
+			logger.Errorf("Create mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "Create overlay vpa mutating webhook configuration succeed.")
+		logger.Info(ctx, "Create mutating webhook configuration succeed.")
 		return nil
 	}
 
@@ -129,10 +129,10 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 	if shouldUpdate {
 		cerr = updateMutatingWebhookConfig(ctx, clientset, isKubeSystemNamespaceBlocked, secret.Data["caCert.pem"])
 		if cerr != nil {
-			logger.Errorf("Update overlay vpa mutating webhook configuration failed. error: %s", *cerr)
+			logger.Errorf("Update mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "Update overlay vpa mutating webhook configuration succeed.")
+		logger.Info(ctx, "Update mutating webhook configuration succeed.")
 	}
 	return nil
 }
@@ -158,9 +158,9 @@ func cleanupSecretAndWebhook(ctx context.Context, clientset kubernetes.Interface
 	return nil
 }
 
-func createVpaTlsSecret(ctx context.Context, clientset kubernetes.Interface, data goalresolvers.CertificateData) *error {
+func createTlsSecret(ctx context.Context, clientset kubernetes.Interface, data goalresolvers.CertificateData) *error {
 	logger := log.MustGetLogger(ctx)
-	vpaSecret := &corev1.Secret{
+	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
 			APIVersion: "v1",
@@ -181,7 +181,7 @@ func createVpaTlsSecret(ctx context.Context, clientset kubernetes.Interface, dat
 		Type: "Opaque",
 	}
 
-	_, createErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Create(ctx, vpaSecret, metav1.CreateOptions{})
+	_, createErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Create(ctx, secret, metav1.CreateOptions{})
 	if createErr != nil {
 		logger.Errorf("create secret %s failed. error: %s", consts.SecretName, createErr)
 		return &createErr
@@ -190,7 +190,7 @@ func createVpaTlsSecret(ctx context.Context, clientset kubernetes.Interface, dat
 	return nil
 }
 
-func updateVpaTlsSecret(ctx context.Context, clientset kubernetes.Interface, data goalresolvers.CertificateData, secret *corev1.Secret) *error {
+func updateTlsSecret(ctx context.Context, clientset kubernetes.Interface, data goalresolvers.CertificateData, secret *corev1.Secret) *error {
 	logger := log.MustGetLogger(ctx)
 	secret.Data["caCert.pem"] = data.CaCertPem
 	secret.Data["caKey.pem"] = data.CaKeyPem
@@ -321,17 +321,17 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 
 	goal, cerr := r.webhookTlsManagerGoalResolver.Resolve(ctx)
 	if cerr != nil {
-		logger.Errorf("Resolve overlay vpa webhook goal failed. error: %s", *cerr)
+		logger.Errorf("Resolve webhook goal failed. error: %s", *cerr)
 		return cerr
 	}
 
-	if !goal.IsVPAEnabled {
+	if !goal.IsWebhookTlsManagerEnabled {
 		cerr = cleanupSecretAndWebhook(ctx, r.kubeClient)
 		if cerr != nil {
 			logger.Errorf("cleanupSecretAndWebhook error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "VPA is disabled. cleanup succeed.")
+		logger.Info(ctx, "WebhookTlsManager is disabled. cleanup succeed.")
 		return nil
 	}
 
@@ -358,7 +358,7 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 
 func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 	logger := log.MustGetLogger(ctx)
-	logger.Info(ctx, "Start reconciling overlay vpa webhook.")
+	logger.Info(ctx, "Start reconciling webhook.")
 	currentTime := time.Now()
 	var cerr *error
 
@@ -370,12 +370,12 @@ func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 		}
 		cerr = r.reconcileOnce(ctx)
 		if cerr == nil {
-			logger.Info(ctx, "Reconcile overlay vpa webhook succeed.")
+			logger.Info(ctx, "Reconcile webhook succeed.")
 			return nil
 		}
 		logger.Errorf("reconcileOnce failed. error: %s", *cerr)
 		time.Sleep(retryInterval)
 	}
-	logger.Error("Reconcile overlay vpa webhook succeed.")
+	logger.Error("Reconcile webhook succeed.")
 	return cerr
 }

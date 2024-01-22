@@ -103,7 +103,7 @@ var _ = Describe("generateVpaCertificates", func() {
 
 	It("succeed", func() {
 		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
-		data, err := g.generateOverlayVpaCertificates(ctx)
+		data, err := g.generateCertificates(ctx)
 		Expect(err).To(BeNil())
 		Expect(data.ServerCertPem).NotTo(BeNil())
 		Expect(data.ServerKeyPem).NotTo(BeNil())

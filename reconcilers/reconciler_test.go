@@ -265,7 +265,7 @@ var _ = Describe("cleanupSecretAndWebhook", func() {
 	})
 })
 
-var _ = Describe("createVpaTlsSecret", func() {
+var _ = Describe("createTlsSecret", func() {
 	var (
 		fakeClientset *fake.Clientset
 		data          = goalresolvers.CertificateData{
@@ -282,7 +282,7 @@ var _ = Describe("createVpaTlsSecret", func() {
 	})
 
 	It("no secret exists", func() {
-		cerr := createVpaTlsSecret(ctx, fakeClientset, data)
+		cerr := createTlsSecret(ctx, fakeClientset, data)
 		Expect(cerr).To(BeNil())
 		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
 		Expect(err).To(BeNil())
@@ -294,12 +294,12 @@ var _ = Describe("createVpaTlsSecret", func() {
 		fakeClientset.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("create secrets error")
 		})
-		cerr := createVpaTlsSecret(ctx, fakeClientset, data)
+		cerr := createTlsSecret(ctx, fakeClientset, data)
 		Expect(cerr).NotTo(BeNil())
 	})
 })
 
-var _ = Describe("updateVpaTlsSecret", func() {
+var _ = Describe("updateTlsSecret", func() {
 	var (
 		fakeClientset *fake.Clientset
 		data          = goalresolvers.CertificateData{
@@ -321,12 +321,12 @@ var _ = Describe("updateVpaTlsSecret", func() {
 			return true, nil, fmt.Errorf("update secrets error")
 		})
 
-		cerr := updateVpaTlsSecret(ctx, fakeClientset, data, s)
+		cerr := updateTlsSecret(ctx, fakeClientset, data, s)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("update secret succeed", func() {
-		cerr := updateVpaTlsSecret(ctx, fakeClientset, data, s)
+		cerr := updateTlsSecret(ctx, fakeClientset, data, s)
 		Expect(cerr).To(BeNil())
 
 		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
@@ -469,7 +469,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 false,
+			IsWebhookTlsManagerEnabled:   false,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 
@@ -483,7 +483,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 false,
+			IsWebhookTlsManagerEnabled:   false,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
@@ -499,7 +499,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 true,
+			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
@@ -523,7 +523,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 true,
+			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
@@ -544,7 +544,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 true,
+			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 		client.PrependReactor("create", "secrets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -561,7 +561,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 true,
+			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 		client.PrependReactor("create", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
@@ -578,7 +578,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     nil,
 			IsKubeSystemNamespaceBlocked: false,
-			IsVPAEnabled:                 true,
+			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 		client = fake.NewSimpleClientset(secret())
