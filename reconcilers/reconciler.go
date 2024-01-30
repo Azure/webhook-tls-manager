@@ -4,18 +4,23 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"time"
 
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/Azure/webhook-tls-manager/config"
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/goalresolvers"
 	"github.com/Azure/webhook-tls-manager/metrics"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
+	"github.com/Azure/webhook-tls-manager/utils"
 )
 
 const (
@@ -24,7 +29,17 @@ const (
 	retryTimeout  = 15 * time.Second
 )
 
-var webhookTimeOutSeconds = int32(30)
+func currentWebhookConfigAndConfigmapDifferent(ctx context.Context, currentWebhookConfig *admissionregistration.MutatingWebhookConfiguration,
+	// If the mutating webhook configuration has multiple webhooks, the result of this function is not accurate.
+	// Because the reflect.DeepEqual function is impacted by the order of array elements.
+	webhookConfigFromConfig *admissionregistration.MutatingWebhookConfiguration) bool {
+	logger := log.MustGetLogger(ctx)
+	if !reflect.DeepEqual(currentWebhookConfig, webhookConfigFromConfig) {
+		logger.Info("currentWebhookConfig different from webhookConfigFromConfig")
+		return true
+	}
+	return false
+}
 
 func shouldUpdateWebhook(ctx context.Context, webhookConfig *admissionregistration.MutatingWebhookConfiguration,
 	isKubeSystemNamespaceBlocked bool, clientset kubernetes.Interface) (bool, *error) {
@@ -45,45 +60,56 @@ func shouldUpdateWebhook(ctx context.Context, webhookConfig *admissionregistrati
 		}
 	}
 
-	secret, getErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+	secret, getErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if getErr != nil {
 		logger.Errorf("get secret error: %s", getErr)
 		return false, &getErr
 	}
 	caCert := secret.Data["caCert.pem"]
 	if len(webhookConfig.Webhooks) == 0 ||
-		&(webhookConfig.Webhooks[0].ClientConfig) == nil ||
+		(len(webhookConfig.Webhooks[0].ClientConfig.CABundle) != 0) ||
 		!bytes.Equal(webhookConfig.Webhooks[0].ClientConfig.CABundle, caCert) {
 		logger.Info("update webhookConfig for CABundle")
 		return true, nil
 	}
+	webhookConfigFromConfig, err := getMutatingWebhookConfigFromConfigmap(ctx, clientset, caCert, isKubeSystemNamespaceBlocked)
+	if err != nil {
+		logger.Errorf("get webhookConfig from configmap error: %s", *err)
+		return false, err
+	}
+
+	if currentWebhookConfigAndConfigmapDifferent(ctx, webhookConfig, webhookConfigFromConfig) {
+		logger.Info("update webhookConfig for webhookConfigFromConfig")
+		return true, nil
+	}
+
 	return false, nil
 }
 
 func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, data goalresolvers.CertificateData) *error {
 	logger := log.MustGetLogger(ctx)
 
-	secret, getErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+	secret, getErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 
 	if k8serrors.IsNotFound(getErr) {
-		logger.Infof("create secret %s", consts.SecretName)
+		logger.Infof("create secret %s", utils.SecretName())
 		cerr := createTlsSecret(ctx, clientset, data)
 		if cerr != nil {
-			logger.Errorf("fail to create secret %s. error: %s", consts.SecretName, *cerr)
+			logger.Errorf("fail to create secret %s. error: %s", utils.SecretName(), *cerr)
 			return cerr
 		}
 		return nil
 	}
 
 	if getErr != nil {
-		logger.Errorf("get secret %s failed. error: %s", consts.SecretName, getErr)
+		logger.Errorf("get secret %s failed. error: %s", utils.SecretName(), getErr)
 		return &getErr
 	}
 
 	// Label has been checked in the goal resolver
 	cerr := updateTlsSecret(ctx, clientset, data, secret)
 	if cerr != nil {
-		logger.Errorf("fail to update secret %s. error: %s", consts.SecretName, *cerr)
+		logger.Errorf("fail to update secret %s. error: %s", utils.SecretName(), *cerr)
 		return cerr
 	}
 	return nil
@@ -91,17 +117,17 @@ func createOrUpdateSecret(ctx context.Context, clientset kubernetes.Interface, d
 
 func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, isKubeSystemNamespaceBlocked bool) *error {
 	logger := log.MustGetLogger(ctx)
-	secret, err := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if err != nil {
-		logger.Infof("fail to get secret %s. error: %s", consts.SecretName, err)
+		logger.Infof("fail to get secret %s. error: %s", utils.SecretName(), err)
 		return &err
 	}
 
 	client := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	webhook, getErr := client.Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+	webhook, getErr := client.Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 
 	if k8serrors.IsNotFound(getErr) {
-		logger.Infof("mutating webhook configuration %s doesn't exist", consts.WebhookConfigName)
+		logger.Infof("mutating webhook configuration %s doesn't exist", utils.WebhookConfigName())
 		cerr := createMutatingWebhookConfig(ctx, clientset, secret.Data["caCert.pem"], isKubeSystemNamespaceBlocked)
 		if cerr != nil {
 			logger.Errorf("Create mutating webhook configuration failed. error: %s", *cerr)
@@ -117,11 +143,11 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 	}
 
 	if v, exist := webhook.ObjectMeta.Labels[consts.ManagedLabelKey]; !exist || v != consts.ManagedLabelValue {
-		logger.Warningf("found mutating webhook configuration %s not managed by AKS", consts.WebhookConfigName)
+		logger.Warningf("found mutating webhook configuration %s not managed by AKS", utils.WebhookConfigName())
 		return nil
 	}
 
-	logger.Infof("mutating webhook configuration %s is managed by AKS", consts.WebhookConfigName)
+	logger.Infof("mutating webhook configuration %s is managed by AKS", utils.WebhookConfigName())
 	shouldUpdate, cerr := shouldUpdateWebhook(ctx, webhook, isKubeSystemNamespaceBlocked, clientset)
 	if cerr != nil {
 		return cerr
@@ -140,20 +166,20 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 func cleanupSecretAndWebhook(ctx context.Context, clientset kubernetes.Interface) *error {
 	logger := log.MustGetLogger(ctx)
 
-	deleteErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Delete(ctx, consts.SecretName, metav1.DeleteOptions{})
+	deleteErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Delete(ctx, utils.SecretName(), metav1.DeleteOptions{})
 	if deleteErr != nil {
-		logger.Errorf("failed to cleanup secret %s. error: %s", consts.SecretName, deleteErr)
+		logger.Errorf("failed to cleanup secret %s. error: %s", utils.SecretName(), deleteErr)
 		return &deleteErr
 	}
-	logger.Infof("cleanup secret %s succeed.", consts.SecretName)
+	logger.Infof("cleanup secret %s succeed.", utils.SecretName())
 
 	client := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	deleteErr = client.Delete(ctx, consts.WebhookConfigName, metav1.DeleteOptions{})
+	deleteErr = client.Delete(ctx, utils.WebhookConfigName(), metav1.DeleteOptions{})
 	if deleteErr != nil {
-		logger.Errorf("failed to cleanup mutating webhook configuration %s. error: %s", consts.WebhookConfigName, deleteErr)
+		logger.Errorf("failed to cleanup mutating webhook configuration %s. error: %s", utils.WebhookConfigName(), deleteErr)
 		return &deleteErr
 	}
-	logger.Infof("cleanup webhook %s succeed.", consts.WebhookConfigName)
+	logger.Infof("cleanup webhook %s succeed.", utils.WebhookConfigName())
 
 	return nil
 }
@@ -166,7 +192,7 @@ func createTlsSecret(ctx context.Context, clientset kubernetes.Interface, data g
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      consts.SecretName,
+			Name:      utils.SecretName(),
 			Namespace: metav1.NamespaceSystem,
 			Labels: map[string]string{
 				consts.ManagedLabelKey: consts.ManagedLabelValue,
@@ -183,10 +209,10 @@ func createTlsSecret(ctx context.Context, clientset kubernetes.Interface, data g
 
 	_, createErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Create(ctx, secret, metav1.CreateOptions{})
 	if createErr != nil {
-		logger.Errorf("create secret %s failed. error: %s", consts.SecretName, createErr)
+		logger.Errorf("create secret %s failed. error: %s", utils.SecretName(), createErr)
 		return &createErr
 	}
-	logger.Infof("secret %s created.", consts.SecretName)
+	logger.Infof("secret %s created.", utils.SecretName())
 	return nil
 }
 
@@ -199,25 +225,41 @@ func updateTlsSecret(ctx context.Context, clientset kubernetes.Interface, data g
 
 	_, updateErr := clientset.CoreV1().Secrets(metav1.NamespaceSystem).Update(ctx, secret, metav1.UpdateOptions{})
 	if updateErr != nil {
-		logger.Errorf("update secret %s failed. error: %s", consts.SecretName, updateErr)
+		logger.Errorf("update secret %s failed. error: %s", utils.SecretName(), updateErr)
 		return &updateErr
 	}
-	logger.Infof("secret %s updated.", consts.SecretName)
+	logger.Infof("secret %s updated.", utils.SecretName())
 	return nil
 }
 
-func createMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Interface, caCert []byte, isKubeSystemNamespaceBlocked bool) *error {
+func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubernetes.Interface, caCert []byte, isKubeSystemNamespaceBlocked bool) (*admissionregistration.MutatingWebhookConfiguration, *error) {
 	logger := log.MustGetLogger(ctx)
-	client := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	registerClientConfig := admissionregistration.WebhookClientConfig{
-		Service: &admissionregistration.ServiceReference{
-			Name:      consts.ServiceName,
-			Namespace: metav1.NamespaceSystem,
-		},
-		CABundle: caCert,
+	name := config.AppConfig.ObjectName + "-webhook-config"
+	cm, err := clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		logger.Errorf("get webhook-config configmap failed. error: %s", err)
+		return nil, &err
 	}
-	sideEffects := admissionregistration.SideEffectClassNone
-	failurePolicy := admissionregistration.Ignore
+	logger.Infof("get webhook-config configmap succeed.")
+
+	mutatingWebhookConfigJson := cm.Data["mutatingWebhookConfig"]
+	if mutatingWebhookConfigJson == "" {
+		logger.Errorf("mutatingWebhookConfig is empty")
+		err = errors.New("mutatingWebhookConfig is empty")
+		return nil, &err
+	}
+	logger.Infof("get mutatingWebhookConfig succeed. mutatingWebhookConfig: %s", mutatingWebhookConfigJson)
+	var mutatingWebhookConfig admissionregistration.MutatingWebhookConfiguration
+	err = yaml.NewYAMLOrJSONDecoder(strings.NewReader(mutatingWebhookConfigJson), 1024).Decode(&mutatingWebhookConfig)
+	if err != nil {
+		logger.Errorf("unmarshal mutatingWebhookConfig failed. error: %s", err)
+		return nil, &err
+	}
+	logger.Infof("unmarshal mutatingWebhookConfig succeed.")
+
+	for i := range mutatingWebhookConfig.Webhooks {
+		mutatingWebhookConfig.Webhooks[i].ClientConfig.CABundle = caCert
+	}
 	var labels map[string]string
 	if !isKubeSystemNamespaceBlocked {
 		logger.Info(ctx, "kube-system is unblocked.")
@@ -231,48 +273,28 @@ func createMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Inter
 			consts.ManagedLabelKey: consts.ManagedLabelValue,
 		}
 	}
-	webhookConfig := &admissionregistration.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   consts.WebhookConfigName,
-			Labels: labels,
-		},
-		Webhooks: []admissionregistration.MutatingWebhook{
-			{
-				Name:                    "vpa.k8s.io",
-				AdmissionReviewVersions: []string{"v1"},
-				Rules: []admissionregistration.RuleWithOperations{
-					{
-						Operations: []admissionregistration.OperationType{admissionregistration.Create},
-						Rule: admissionregistration.Rule{
-							APIGroups:   []string{""},
-							APIVersions: []string{"v1"},
-							Resources:   []string{"pods"},
-						},
-					},
-					{
-						Operations: []admissionregistration.OperationType{admissionregistration.Create, admissionregistration.Update},
-						Rule: admissionregistration.Rule{
-							APIGroups:   []string{"autoscaling.k8s.io"},
-							APIVersions: []string{"*"},
-							Resources:   []string{"verticalpodautoscalers"},
-						},
-					},
-				},
-				FailurePolicy:  &failurePolicy,
-				ClientConfig:   registerClientConfig,
-				SideEffects:    &sideEffects,
-				TimeoutSeconds: &webhookTimeOutSeconds,
-			},
-		},
+	mutatingWebhookConfig.Labels = labels
+
+	return &mutatingWebhookConfig, nil
+}
+
+func createMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Interface, caCert []byte, isKubeSystemNamespaceBlocked bool) *error {
+	logger := log.MustGetLogger(ctx)
+	mutatingWebhookConfig, err := getMutatingWebhookConfigFromConfigmap(ctx, clientset, caCert, isKubeSystemNamespaceBlocked)
+	if err != nil {
+		logger.Errorf("get mutating webhook config failed. error: %s", *err)
+		return err
 	}
 
-	_, createErr := client.Create(ctx, webhookConfig, metav1.CreateOptions{})
+	client := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations()
+
+	_, createErr := client.Create(ctx, mutatingWebhookConfig, metav1.CreateOptions{})
 	if createErr != nil {
-		logger.Errorf("create mutating webhook configuration %s failed. error: %s", consts.WebhookConfigName, createErr)
+		logger.Errorf("create mutating webhook configuration %s failed. error: %s", utils.WebhookConfigName(), createErr)
 		return &createErr
 
 	}
-	logger.Infof("mutating webhook configuration %s created.", consts.WebhookConfigName)
+	logger.Infof("mutating webhook configuration %s created.", utils.WebhookConfigName())
 	return nil
 
 }
@@ -280,9 +302,9 @@ func createMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Inter
 func updateMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Interface, isKubeSystemNamespaceBlocked bool, data []byte) *error {
 	logger := log.MustGetLogger(ctx)
 	client := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	webhook, getErr := client.Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+	webhook, getErr := client.Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 	if getErr != nil {
-		logger.Infof("fail to get mutating webhook config %s. error: %s", consts.WebhookConfigName, getErr)
+		logger.Infof("fail to get mutating webhook config %s. error: %s", utils.WebhookConfigName(), getErr)
 		return &getErr
 	}
 	if !isKubeSystemNamespaceBlocked {
@@ -298,7 +320,7 @@ func updateMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Inter
 	}
 	_, updateErr := client.Update(ctx, webhook, metav1.UpdateOptions{})
 	if updateErr != nil {
-		logger.Infof("fail to update mutating webhook config %s. error: %s", consts.WebhookConfigName, getErr)
+		logger.Infof("fail to update mutating webhook config %s. error: %s", utils.WebhookConfigName(), getErr)
 		return &updateErr
 	}
 	return nil
