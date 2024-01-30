@@ -90,7 +90,7 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 })
 
-var _ = Describe("generateVpaCertificates", func() {
+var _ = Describe("generateCertificates", func() {
 
 	var (
 		ctx           context.Context

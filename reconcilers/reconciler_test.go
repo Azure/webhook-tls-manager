@@ -552,7 +552,7 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 	})
 })
 
-var _ = Describe("overlay vpa webhook reconciler no retry", func() {
+var _ = Describe("webhook tls manager reconciler reconcile", func() {
 	var (
 		ctx          context.Context
 		logger       *logrus.Entry
@@ -578,7 +578,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 	})
 
 	It("goalresolver resolve fail", func() {
-		rerr := errors.New("GenerateVpaCertificates error")
+		rerr := errors.New("GenerateCertificates error")
 		goalresolver.EXPECT().Resolve(ctx).Return(nil, &rerr).AnyTimes()
 
 		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
@@ -587,7 +587,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		Expect(err).NotTo(BeNil())
 	})
 
-	It("reconcile fail: vpa disabled and cleanup error", func() {
+	It("reconcile fail: WebhookTlsManager disabled and cleanup error", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
@@ -601,7 +601,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		Expect(cerr).Error()
 	})
 
-	It("reconcile succeed: vpa disabled and cleanup succeed", func() {
+	It("reconcile succeed: WebhookTlsManager disabled and cleanup succeed", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
