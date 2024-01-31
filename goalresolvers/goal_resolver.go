@@ -6,12 +6,14 @@ import (
 	"crypto/x509/pkix"
 	"time"
 
+	"github.com/Azure/webhook-tls-manager/config"
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certcreator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certgenerator"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certoperator"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
+	"github.com/Azure/webhook-tls-manager/utils"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,21 +44,21 @@ func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (b
 
 	logger := log.MustGetLogger(ctx)
 
-	secret, getErr := g.kubeClient.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+	secret, getErr := g.kubeClient.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if k8serrors.IsNotFound(getErr) {
-		logger.Infof("secret %s not exists", consts.SecretName)
+		logger.Infof("secret %s not exists", utils.SecretName())
 		return true, nil
 	}
 	if getErr != nil {
-		logger.Errorf("get secret %s failed. error: %s", consts.SecretName, getErr)
+		logger.Errorf("get secret %s failed. error: %s", utils.SecretName(), getErr)
 		return false, &getErr
 	}
-	logger.Infof("secret %s exists", consts.SecretName)
+	logger.Infof("secret %s exists", utils.SecretName())
 	if v, exist := secret.ObjectMeta.Labels[consts.ManagedLabelKey]; exist && v == consts.ManagedLabelValue {
-		logger.Infof("found secret %s managed by aks. checking expiration date.", consts.SecretName)
-		expired, err := certificates.IsPEMCertificateExpired(logger, string(secret.Data["serverCert.pem"]), consts.SecretName, time.Now().AddDate(0, 1, 0))
+		logger.Infof("found secret %s managed by aks. checking expiration date.", utils.SecretName())
+		expired, err := certificates.IsPEMCertificateExpired(logger, string(secret.Data["serverCert.pem"]), utils.SecretName(), time.Now().AddDate(0, 1, 0))
 		if err != nil {
-			logger.Errorf("failed to check cert %s. error: %s", consts.SecretName, err)
+			logger.Errorf("failed to check cert %s. error: %s", utils.SecretName(), err)
 			return false, &err
 		}
 		if expired {
@@ -66,7 +68,7 @@ func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (b
 		logger.Infof("cert valid.")
 		return false, nil
 	}
-	logger.Warningf("found secret %s is not managed by AKS.", consts.SecretName)
+	logger.Warningf("found secret %s is not managed by AKS.", utils.SecretName())
 	return false, nil
 }
 
@@ -74,15 +76,15 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 	logger := log.MustGetLogger(ctx)
 	now := time.Now().UTC()
 	notBefore := now.Add(-certificates.ClockSkewDuration)
-	notAfter := now.AddDate(certificates.CaValidityYears, 0, 0)
+	notAfter := now.AddDate(config.AppConfig.CaValidityYears, 0, 0)
 	caCsr := &x509.Certificate{
-		Subject:               pkix.Name{CommonName: consts.CommonName},
+		Subject:               pkix.Name{CommonName: utils.CACertificateCommonName()},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		BasicConstraintsValid: true,
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
 		IsCA:                  true,
-		DNSNames:              []string{consts.CommonName},
+		DNSNames:              []string{utils.CACertificateCommonName()},
 	}
 
 	caCert, caCertPem, caKey, caKeyPem, rerr := g.certOperator.CreateSelfSignedCertificateKeyPair(ctx, caCsr)
@@ -91,18 +93,18 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 		return &CertificateData{}, &rerr.RawError
 	}
 
-	notAfter = now.AddDate(certificates.DefaultValidityYears, 0, 0)
+	notAfter = now.AddDate(config.AppConfig.ServerValidityYears, 0, 0)
 
 	serverCsr := &x509.Certificate{
-		Subject:               pkix.Name{CommonName: consts.ServerCommonName},
-		Issuer:                pkix.Name{CommonName: consts.CommonName},
+		Subject:               pkix.Name{CommonName: utils.ServerCertificateCommonName()},
+		Issuer:                pkix.Name{CommonName: utils.CACertificateCommonName()},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
-		DNSNames:              []string{consts.ServerCommonName},
+		DNSNames:              []string{utils.ServerCertificateCommonName()},
 	}
 
 	serverCertPem, serverKeyPem, rerr := g.certOperator.CreateCertificateKeyPair(ctx, serverCsr, caCert, caKey)
