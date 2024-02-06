@@ -1,0 +1,4 @@
+apiVersion: v2
+name: vpa-helm-chart
+description: A Helm chart for Kubernetes Vertical Pod Autoscaler
+version: 0.1.1
