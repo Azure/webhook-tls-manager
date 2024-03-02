@@ -24,4 +24,5 @@ go.work
 *.iml
 launch.json
 .idea/
-**/.kube/cache/
+*.kube
+
