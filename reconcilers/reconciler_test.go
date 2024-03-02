@@ -18,17 +18,108 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/Azure/webhook-tls-manager/config"
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/goalresolvers"
 	"github.com/Azure/webhook-tls-manager/goalresolvers/mock_goal_resolvers"
 	"github.com/Azure/webhook-tls-manager/metrics"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
+	"github.com/Azure/webhook-tls-manager/utils"
 )
 
 const (
 	caBundleKey   = "caCert.pem"
 	caBundleValue = "different-from-secret"
 )
+
+var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
+	var (
+		ctx                        context.Context
+		logger                     *logrus.Entry
+		currentWebhookConfig       *admissionregistration.MutatingWebhookConfiguration
+		webhookConfigFromConfigmap *admissionregistration.MutatingWebhookConfiguration
+		currentMutatingWebhooks    []admissionregistration.MutatingWebhook
+		mutatingWebhooks           []admissionregistration.MutatingWebhook
+	)
+
+	BeforeEach(func() {
+		config.NewConfig()
+		logger = log.NewLogger(context.Background())
+		ctx = log.WithLogger(context.Background(), logger)
+		currentMutatingWebhooks = []admissionregistration.MutatingWebhook{
+			{
+				Name: "vpa.k8s.io",
+				ClientConfig: admissionregistration.WebhookClientConfig{
+					Service: &admissionregistration.ServiceReference{
+						Namespace: "kube-system",
+						Name:      "vpa-admission-controller",
+						Path:      nil,
+					},
+					URL:      nil,
+					CABundle: []byte(caBundleValue),
+				},
+				Rules: []admissionregistration.RuleWithOperations{
+					{
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+						},
+						Rule: admissionregistration.Rule{
+							APIGroups:   []string{"autoscaling.k8s.io"},
+							APIVersions: []string{"*"},
+							Resources:   []string{"verticalpodautoscalers"},
+							Scope:       nil,
+						},
+					},
+				},
+			},
+		}
+		mutatingWebhooks = []admissionregistration.MutatingWebhook{
+			{
+				Name: "vpa.k8s.io",
+				ClientConfig: admissionregistration.WebhookClientConfig{
+					Service: &admissionregistration.ServiceReference{
+						Namespace: "kube-system",
+						Name:      "vpa-admission-controller",
+						Path:      nil,
+					},
+					URL:      nil,
+					CABundle: []byte(caBundleValue),
+				},
+				Rules: []admissionregistration.RuleWithOperations{
+					{
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+							admissionregistration.Update,
+						},
+						Rule: admissionregistration.Rule{
+							APIGroups:   []string{"autoscaling.k8s.io"},
+							APIVersions: []string{"*"},
+							Resources:   []string{"verticalpodautoscalers"},
+							Scope:       nil,
+						},
+					},
+				},
+			},
+		}
+	})
+
+	It("different", func() {
+		currentWebhookConfig = mutatingWebhookConfiguration(true)
+		webhookConfigFromConfigmap = mutatingWebhookConfiguration(true)
+		currentWebhookConfig.Webhooks = currentMutatingWebhooks
+		webhookConfigFromConfigmap.Webhooks = mutatingWebhooks
+		res := currentWebhookConfigAndConfigmapDifferent(ctx, currentWebhookConfig, webhookConfigFromConfigmap)
+		Expect(res).To(BeTrue())
+	})
+
+	It("same", func() {
+		currentWebhookConfig = mutatingWebhookConfiguration(true)
+		webhookConfigFromConfigmap = mutatingWebhookConfiguration(true)
+		res := currentWebhookConfigAndConfigmapDifferent(ctx, currentWebhookConfig, webhookConfigFromConfigmap)
+		Expect(res).To(BeFalse())
+	})
+
+})
 
 var _ = Describe("shouldUpdateWebhook", func() {
 
@@ -41,10 +132,11 @@ var _ = Describe("shouldUpdateWebhook", func() {
 	)
 
 	BeforeEach(func() {
+		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.Background(), logger)
 		s = secret()
-		client = fake.NewSimpleClientset(s)
+		client = fake.NewSimpleClientset(s, prepareCM())
 	})
 
 	It("kube system is blocked and need to update webhook label", func() {
@@ -55,28 +147,12 @@ var _ = Describe("shouldUpdateWebhook", func() {
 		Expect(res).To(BeTrue())
 	})
 
-	It("kube system is blocked and no need to update webhook label", func() {
-		webhook = mutatingWebhookConfiguration(true)
-		webhook.Webhooks[0].ClientConfig.CABundle = s.Data[caBundleKey]
-		res, err := shouldUpdateWebhook(ctx, webhook, true, client)
-		Expect(err).To(BeNil())
-		Expect(res).To(BeFalse())
-	})
-
 	It("kube system is unblocked and need to update webhook label", func() {
 		webhook = mutatingWebhookConfiguration(true)
 		webhook.Webhooks[0].ClientConfig.CABundle = s.Data[caBundleKey]
 		res, err := shouldUpdateWebhook(ctx, webhook, false, client)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
-	})
-
-	It("kube system is unblocked and no need to update webhook label", func() {
-		webhook = mutatingWebhookConfiguration(false)
-		webhook.Webhooks[0].ClientConfig.CABundle = s.Data[caBundleKey]
-		res, err := shouldUpdateWebhook(ctx, webhook, false, client)
-		Expect(err).To(BeNil())
-		Expect(res).To(BeFalse())
 	})
 
 	It("need to update caBundle", func() {
@@ -103,7 +179,8 @@ var _ = Describe("createOrUpdateSecret", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 	})
 
 	It("secret not exists and create secret error", func() {
@@ -118,13 +195,13 @@ var _ = Describe("createOrUpdateSecret", func() {
 	It("secret not exists and create secret succeed", func() {
 		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
 	})
 
 	It("get secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(s)
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
@@ -134,7 +211,7 @@ var _ = Describe("createOrUpdateSecret", func() {
 	})
 
 	It("update secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(s)
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
 		fakeClientset.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("update secrets error")
 		})
@@ -144,10 +221,10 @@ var _ = Describe("createOrUpdateSecret", func() {
 	})
 
 	It("update secret succeed", func() {
-		fakeClientset = fake.NewSimpleClientset(s)
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
 		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
 	})
@@ -163,9 +240,10 @@ var _ = Describe("createOrUpdateWebhook", func() {
 	)
 
 	BeforeEach(func() {
+		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
-		client = fake.NewSimpleClientset(secret())
+		client = fake.NewSimpleClientset(secret(), prepareCM())
 	})
 
 	It("create webhook and get secret error", func() {
@@ -187,13 +265,13 @@ var _ = Describe("createOrUpdateWebhook", func() {
 	It("create webhook succeed", func() {
 		cerr := createOrUpdateWebhook(ctx, client, false)
 		Expect(cerr).To(BeNil())
-		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
 		Expect(webhook).NotTo(BeNil())
 	})
 
 	It("update webhook error", func() {
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false))
+		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false), prepareCM())
 		client.PrependReactor("update", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
@@ -202,10 +280,10 @@ var _ = Describe("createOrUpdateWebhook", func() {
 	})
 
 	It("update webhook succeed", func() {
-		client = fake.NewSimpleClientset(mutatingWebhookConfiguration(true), secret())
+		client = fake.NewSimpleClientset(mutatingWebhookConfiguration(true), secret(), prepareCM())
 		cerr := createOrUpdateWebhook(ctx, client, false)
 		Expect(cerr).To(BeNil())
-		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
 		Expect(webhook).NotTo(BeNil())
 		Expect(webhook.ObjectMeta.Labels[consts.AdmissionEnforcerDisabledLabel]).To(BeEquivalentTo(consts.AdmissionEnforcerDisabledValue))
@@ -214,16 +292,16 @@ var _ = Describe("createOrUpdateWebhook", func() {
 	It("webhook not managed by aks exists", func() {
 		webhookConfig := &admissionregistration.MutatingWebhookConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: consts.WebhookConfigName,
+				Name: utils.WebhookConfigName(),
 				Labels: map[string]string{
 					consts.ManagedLabelKey: "non-aks",
 				},
 			},
 		}
-		client = fake.NewSimpleClientset(webhookConfig, secret())
+		client = fake.NewSimpleClientset(webhookConfig, secret(), prepareCM())
 		cerr := createOrUpdateWebhook(ctx, client, false)
 		Expect(cerr).To(BeNil())
-		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
 		Expect(webhook).NotTo(BeNil())
 		Expect(webhook.Labels[consts.ManagedLabelKey]).To(BeEquivalentTo("non-aks"))
@@ -239,27 +317,28 @@ var _ = Describe("cleanupSecretAndWebhook", func() {
 	)
 
 	BeforeEach(func() {
+		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
-		fakeClientset = fake.NewSimpleClientset()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 	})
 
 	It("delete secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(mutatingWebhookConfiguration(false))
+		fakeClientset = fake.NewSimpleClientset(mutatingWebhookConfiguration(false), prepareCM())
 		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
 		Expect(cerr).Error()
 	})
 
 	It("delete webhook error", func() {
-		fakeClientset = fake.NewSimpleClientset(secret())
+		fakeClientset = fake.NewSimpleClientset(secret(), prepareCM())
 		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
-		_, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		_, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 		Expect(cerr).Error()
 	})
 
 	It("succeed", func() {
-		fakeClientset = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false))
+		fakeClientset = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false), prepareCM())
 		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
 		Expect(cerr).To(BeNil())
 	})
@@ -278,19 +357,20 @@ var _ = Describe("createTlsSecret", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 	})
 
 	It("no secret exists", func() {
 		cerr := createTlsSecret(ctx, fakeClientset, data)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret).NotTo(BeNil())
 	})
 
 	It("create error", func() {
-		fakeClientset = fake.NewSimpleClientset()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 		fakeClientset.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("create secrets error")
 		})
@@ -313,7 +393,8 @@ var _ = Describe("updateTlsSecret", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClientset = fake.NewSimpleClientset(s)
+		config.NewConfig()
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
 	})
 
 	It("update secret error", func() {
@@ -329,9 +410,46 @@ var _ = Describe("updateTlsSecret", func() {
 		cerr := updateTlsSecret(ctx, fakeClientset, data, s)
 		Expect(cerr).To(BeNil())
 
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
+	})
+})
+
+var _ = Describe("getMutatingWebhookConfigFromConfigmap", func() {
+	var (
+		fakeClientset *fake.Clientset
+		caCertPem     = []byte("caCert")
+		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+	)
+
+	BeforeEach(func() {
+		config.NewConfig()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
+	})
+
+	It("success", func() {
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		Expect(err).To(BeNil())
+		Expect(webhook.Webhooks[0].Name).To(Equal("vpa.k8s.io"))
+	})
+
+	It("get configmap error", func() {
+		fakeClientset = fake.NewSimpleClientset()
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		Expect(err).NotTo(BeNil())
+		Expect(webhook).To(BeNil())
+	})
+
+	It("get data error", func() {
+		fakeClientset = fake.NewSimpleClientset(&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "webhook-tls-manager-webhook-config",
+			},
+		})
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		Expect(err).NotTo(BeNil())
+		Expect(webhook).To(BeNil())
 	})
 })
 
@@ -343,13 +461,15 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 	)
 
 	BeforeEach(func() {
-		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 	})
 
 	It("success", func() {
+		name := "webhook-tls-manager-webhook-config"
 		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
 		Expect(cerr).To(BeNil())
-		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(webhook.Webhooks[0].Name).To(Equal("vpa.k8s.io"))
 
@@ -366,7 +486,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 		})
 		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
 		Expect(cerr).NotTo(BeNil())
-		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).NotTo(BeNil())
 		Expect(webhook).To(BeNil())
 	})
@@ -374,7 +494,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 	It("unblock kube-system namespace", func() {
 		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, false)
 		Expect(cerr).To(BeNil())
-		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 
 		_, keyExist := webhook.ObjectMeta.Labels[consts.AdmissionEnforcerDisabledLabel]
@@ -390,12 +510,13 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 	)
 
 	BeforeEach(func() {
+		config.NewConfig()
 		webhook = mutatingWebhookConfiguration(true)
-		fakeClientset = fake.NewSimpleClientset(webhook)
+		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM())
 	})
 
 	It("get webhook error", func() {
-		fakeClientset = fake.NewSimpleClientset()
+		fakeClientset = fake.NewSimpleClientset(prepareCM())
 		cerr := updateMutatingWebhookConfig(ctx, fakeClientset, false, []byte{})
 		Expect(cerr).NotTo(BeNil())
 	})
@@ -410,10 +531,10 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 
 	It("update webhook when kube-system is blocked", func() {
 		webhook.Labels[consts.AdmissionEnforcerDisabledLabel] = "true"
-		fakeClientset = fake.NewSimpleClientset(webhook)
+		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM())
 		cerr := updateMutatingWebhookConfig(ctx, fakeClientset, true, []byte{})
 		Expect(cerr).To(BeNil())
-		res, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		res, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		_, keyExist := res.Labels[consts.AdmissionEnforcerDisabledLabel]
 		Expect(keyExist).To(BeFalse())
@@ -424,14 +545,14 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 		caCert := []byte("test")
 		cerr := updateMutatingWebhookConfig(ctx, fakeClientset, false, caCert)
 		Expect(cerr).To(BeNil())
-		res, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		res, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(res.Labels[consts.AdmissionEnforcerDisabledLabel]).To(BeEquivalentTo("true"))
 		Expect(res.Webhooks[0].ClientConfig.CABundle).To(BeEquivalentTo(caCert))
 	})
 })
 
-var _ = Describe("overlay vpa webhook reconciler no retry", func() {
+var _ = Describe("webhook tls manager reconciler reconcile", func() {
 	var (
 		ctx          context.Context
 		logger       *logrus.Entry
@@ -442,10 +563,11 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 	)
 
 	BeforeEach(func() {
+		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
 		mockctl = gomock.NewController(GinkgoT())
-		client = fake.NewSimpleClientset()
+		client = fake.NewSimpleClientset(prepareCM())
 		goalresolver = mock_goal_resolvers.NewMockWebhookTlsManagerGoalResolverInterface(mockctl)
 		certData = goalresolvers.CertificateData{
 			CaCertPem:     []byte("CaCertPem"),
@@ -456,7 +578,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 	})
 
 	It("goalresolver resolve fail", func() {
-		rerr := errors.New("GenerateVpaCertificates error")
+		rerr := errors.New("GenerateCertificates error")
 		goalresolver.EXPECT().Resolve(ctx).Return(nil, &rerr).AnyTimes()
 
 		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
@@ -465,7 +587,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		Expect(err).NotTo(BeNil())
 	})
 
-	It("reconcile fail: vpa disabled and cleanup error", func() {
+	It("reconcile fail: WebhookTlsManager disabled and cleanup error", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
@@ -479,15 +601,15 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		Expect(cerr).Error()
 	})
 
-	It("reconcile succeed: vpa disabled and cleanup succeed", func() {
+	It("reconcile succeed: WebhookTlsManager disabled and cleanup succeed", func() {
 		goal := goalresolvers.WebhookTlsManagerGoal{
 			CertData:                     &certData,
 			IsKubeSystemNamespaceBlocked: false,
 			IsWebhookTlsManagerEnabled:   false,
 		}
-		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
+		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked))
+		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM())
 		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
 		cerr := reconciler.Reconcile(ctx)
 
@@ -503,18 +625,18 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked))
+		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM())
 		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).To(BeNil())
 		Expect(testutil.ToFloat64(metrics.RotateCertificateMetric)).To(BeEquivalentTo(1))
 
-		webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(webhook).NotTo(BeNil())
 		Expect(webhook.Webhooks[0].ClientConfig.CABundle).To(BeEquivalentTo(goal.CertData.CaCertPem))
 		Expect(err).To(BeNil())
-		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(secret).NotTo(BeNil())
 		Expect(err).To(BeNil())
 	})
@@ -532,10 +654,10 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 
 		Expect(cerr).To(BeNil())
 
-		webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, consts.WebhookConfigName, metav1.GetOptions{})
+		webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(webhook).NotTo(BeNil())
 		Expect(err).To(BeNil())
-		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, consts.SecretName, metav1.GetOptions{})
+		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(secret).NotTo(BeNil())
 		Expect(err).To(BeNil())
 	})
@@ -581,7 +703,7 @@ var _ = Describe("overlay vpa webhook reconciler no retry", func() {
 			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
-		client = fake.NewSimpleClientset(secret())
+		client = fake.NewSimpleClientset(secret(), prepareCM())
 		client.PrependReactor("get", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
@@ -598,8 +720,7 @@ func mutatingWebhookConfiguration(systemNamespaceBlocked bool) *admissionregistr
 	var label map[string]string
 	if systemNamespaceBlocked {
 		label = map[string]string{
-			consts.ManagedLabelKey:                consts.ManagedLabelValue,
-			consts.AdmissionEnforcerDisabledLabel: "false",
+			consts.ManagedLabelKey: consts.ManagedLabelValue,
 		}
 	} else {
 		label = map[string]string{
@@ -607,14 +728,62 @@ func mutatingWebhookConfiguration(systemNamespaceBlocked bool) *admissionregistr
 			consts.AdmissionEnforcerDisabledLabel: "true",
 		}
 	}
+	failurePolicy := admissionregistration.Fail
+	matchPolicy := admissionregistration.Equivalent
+	sideEffects := admissionregistration.SideEffectClassNone
+	timeout := int32(3)
+	port := int32(443)
+	scope := admissionregistration.AllScopes
 	return &admissionregistration.MutatingWebhookConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "MutatingWebhookConfiguration",
+			APIVersion: "admissionregistration.k8s.io/v1",
+		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   consts.WebhookConfigName,
+			Name:   utils.WebhookConfigName(),
 			Labels: label,
 		},
 		Webhooks: []admissionregistration.MutatingWebhook{
 			{
-				NamespaceSelector: nil,
+				Name:                    "vpa.k8s.io",
+				AdmissionReviewVersions: []string{"v1"},
+				ClientConfig: admissionregistration.WebhookClientConfig{
+					Service: &admissionregistration.ServiceReference{
+						Namespace: "kube-system",
+						Name:      "webhook-tls-manager-webhook-config",
+						Port:      &port,
+						Path:      nil,
+					},
+				},
+				FailurePolicy:  &failurePolicy,
+				MatchPolicy:    &matchPolicy,
+				SideEffects:    &sideEffects,
+				TimeoutSeconds: &timeout,
+				Rules: []admissionregistration.RuleWithOperations{
+					{
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+							admissionregistration.Update,
+						},
+						Rule: admissionregistration.Rule{
+							APIGroups:   []string{"autoscaling.k8s.io"},
+							APIVersions: []string{"*"},
+							Resources:   []string{"verticalpodautoscalers"},
+							Scope:       &scope,
+						},
+					},
+					{
+						Operations: []admissionregistration.OperationType{
+							admissionregistration.Create,
+						},
+						Rule: admissionregistration.Rule{
+							APIGroups:   []string{""},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"pods"},
+							Scope:       &scope,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -623,7 +792,7 @@ func mutatingWebhookConfiguration(systemNamespaceBlocked bool) *admissionregistr
 func secret() *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      consts.SecretName,
+			Name:      "webhook-tls-manager-tls-certs",
 			Namespace: metav1.NamespaceSystem,
 		},
 		Data: map[string][]byte{
@@ -633,4 +802,56 @@ func secret() *corev1.Secret {
 			"serverKey.pem":  []byte("testServerKey"),
 		},
 	}
+}
+
+func prepareCM() *corev1.ConfigMap {
+	cmData := `
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+    name: webhook-tls-manager-webhook-config
+webhooks:
+  - admissionReviewVersions:
+      - v1
+    clientConfig:
+      service:
+        name: webhook-tls-manager-webhook-config
+        namespace: kube-system
+        port: 443
+    failurePolicy: Ignore
+    matchPolicy: Equivalent
+    name: vpa.k8s.io
+    sideEffects: None
+    timeoutSeconds: 3
+    rules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+        resources:
+          - pods
+        scope: '*'
+      - apiGroups:
+        - autoscaling.k8s.io
+        apiVersions:
+          - '*'
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - verticalpodautoscalers
+        scope: '*'
+`
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "webhook-tls-manager-webhook-config",
+			Namespace: metav1.NamespaceSystem,
+		},
+		Data: map[string]string{
+			"mutatingWebhookConfig": cmData,
+		},
+	}
+	return cm
 }

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Azure/webhook-tls-manager/config"
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
+	"github.com/Azure/webhook-tls-manager/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -28,6 +30,7 @@ var _ = Describe("shouldRotateCert", func() {
 
 	BeforeEach(func() {
 		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
 	})
 
 	It("cert secret doesn't exist", func() {
@@ -73,7 +76,7 @@ var _ = Describe("shouldRotateCert", func() {
 				APIVersion: "v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      consts.SecretName,
+				Name:      utils.SecretName(),
 				Namespace: metav1.NamespaceSystem,
 			},
 			Data: map[string][]byte{},
@@ -87,7 +90,7 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 })
 
-var _ = Describe("generateVpaCertificates", func() {
+var _ = Describe("generateCertificates", func() {
 
 	var (
 		ctx           context.Context
@@ -162,7 +165,7 @@ func generateSecret(cert string) *corev1.Secret {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      consts.SecretName,
+			Name:      utils.SecretName(),
 			Namespace: metav1.NamespaceSystem,
 			Labels: map[string]string{
 				consts.ManagedLabelKey: consts.ManagedLabelValue,

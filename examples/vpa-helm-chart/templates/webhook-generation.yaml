@@ -1,0 +1,142 @@
+---
+
+# templates/webhook-generation.yaml
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-delete
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+  name: vpa-webhook-generation
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vpa-webhook-generation-webhook
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-delete
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+rules:
+  - apiGroups: [ "admissionregistration.k8s.io"]
+    resources: [ "mutatingwebhookconfigurations"]
+    resourceNames:
+    - {{ .Values.componentName }}-webhook-config
+    # resourceNames: ["*-webhook-config"]
+    verbs: [ "get", "delete", "update"]
+  - apiGroups: [ "admissionregistration.k8s.io"]
+    resources: [ "mutatingwebhookconfigurations"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vpa-webhook-generation-secret
+  namespace: kube-system
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-delete
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+    - {{ .Values.componentName }}-tls-certs
+    # resourceNames: ["*-tls-certs"]
+    verbs: ["get", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-webhook-generation-webhook
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-delete
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-webhook-generation-webhook
+subjects:
+  - kind: ServiceAccount
+    name: vpa-webhook-generation
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vpa-webhook-generation-secret
+  namespace: kube-system
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade,post-delete
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vpa-webhook-generation-secret
+subjects:
+  - kind: ServiceAccount
+    name: vpa-webhook-generation
+    namespace: kube-system
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vpa-cert-webhook-check
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "2"
+    # "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      serviceAccountName: vpa-webhook-generation
+      containers:
+        - name: vpa-webhook-generation
+          # image: "mcr.microsoft.com/aks/ccp/overlay-vpa-webhook-generation:master.230714.2"
+          # image: "vpatest.azurecr.io/public/aks/ccp/overlay-vpa-webhook-generation:zhifanhui-local-1696550220-linux-amd64"
+          image: alexhzf/webhook-tls-manager:0.0.1
+          imagePullPolicy: Always
+          command:
+            - /webhook-tls-manager
+            - --webhook-tls-manager-managed-object-name=vpa
+          ports:
+            - name: prometheus
+              containerPort: 8943
+      restartPolicy: OnFailure
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vpa-cert-webhook-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "2"
+    # "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      serviceAccountName: vpa-webhook-generation
+      containers:
+        - name: vpa-webhook-generation
+          # image: "mcr.microsoft.com/aks/ccp/overlay-vpa-webhook-generation:master.230714.2"
+          # image: "vpatest.azurecr.io/public/aks/ccp/overlay-vpa-webhook-generation:zhifanhui-local-1696534395-linux-amd64"
+          image: alexhzf/webhook-tls-manager:0.0.1
+          imagePullPolicy: Always
+          command:
+            - /webhook-tls-manager
+            - --webhook-tls-manager-enabled=false
+            - --webhook-tls-manager-managed-object-name=vpa
+      restartPolicy: OnFailure

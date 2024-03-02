@@ -3,6 +3,7 @@ package metrics
 import (
 	"testing"
 
+	"github.com/Azure/webhook-tls-manager/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestMetrics(t *testing.T) {
-	metricName := "vpa_webhook_generation_rotate_certificate_result"
+	metricName := utils.MetricsPrefix() + "_rotate_certificate_result"
 	mf, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
 	metric := getMetrics(mf, metricName)
