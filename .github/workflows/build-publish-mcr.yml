@@ -13,7 +13,7 @@ permissions:
   contents: read  # This is required for actions/checkout
 
 env:
-  REGISTRY_REPO: unlisted/aks/eno
+  REGISTRY_REPO: unlisted/aks/webhook-tls-manager
 
 jobs:
   prepare-variables:
