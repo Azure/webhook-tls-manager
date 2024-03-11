@@ -7,4 +7,4 @@ IMAGE_VERSION ?= $(TAG)
 
 .PHONY: docker-build
 docker-build:
-	docker buildx build --platform linux/amd64 -t $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION) .
+	docker buildx build --platform linux/amd64 --push -t $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_VERSION) .
