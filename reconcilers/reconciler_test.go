@@ -124,25 +124,26 @@ var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
 var _ = Describe("shouldUpdateWebhook", func() {
 
 	var (
-		ctx     context.Context
-		logger  *logrus.Entry
-		webhook *admissionregistration.MutatingWebhookConfiguration
-		client  *fake.Clientset
-		s       *corev1.Secret
+		ctx       context.Context
+		logger    *logrus.Entry
+		webhook   *admissionregistration.MutatingWebhookConfiguration
+		client    *fake.Clientset
+		s         *corev1.Secret
+		namespace = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.Background(), logger)
-		s = secret()
-		client = fake.NewSimpleClientset(s, prepareCM())
+		s = secret(namespace)
+		client = fake.NewSimpleClientset(s, prepareCM(namespace))
 	})
 
 	It("kube system is blocked and need to update webhook label", func() {
 		webhook = mutatingWebhookConfiguration(false)
 		webhook.Webhooks[0].ClientConfig.CABundle = s.Data[caBundleKey]
-		res, err := shouldUpdateWebhook(ctx, webhook, true, client)
+		res, err := shouldUpdateWebhook(ctx, webhook, true, client, namespace)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
 	})
@@ -150,7 +151,7 @@ var _ = Describe("shouldUpdateWebhook", func() {
 	It("kube system is unblocked and need to update webhook label", func() {
 		webhook = mutatingWebhookConfiguration(true)
 		webhook.Webhooks[0].ClientConfig.CABundle = s.Data[caBundleKey]
-		res, err := shouldUpdateWebhook(ctx, webhook, false, client)
+		res, err := shouldUpdateWebhook(ctx, webhook, false, client, namespace)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
 	})
@@ -158,7 +159,7 @@ var _ = Describe("shouldUpdateWebhook", func() {
 	It("need to update caBundle", func() {
 		webhook = mutatingWebhookConfiguration(false)
 		webhook.Webhooks[0].ClientConfig.CABundle = []byte(caBundleValue)
-		res, err := shouldUpdateWebhook(ctx, webhook, false, client)
+		res, err := shouldUpdateWebhook(ctx, webhook, false, client, namespace)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
 	})
@@ -173,14 +174,15 @@ var _ = Describe("createOrUpdateSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		logger = log.NewLogger(context.Background())
-		ctx    = log.WithLogger(context.TODO(), logger)
-		s      = secret()
+		logger    = log.NewLogger(context.Background())
+		ctx       = log.WithLogger(context.TODO(), logger)
+		namespace = "test"
+		s         = secret(namespace)
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
 
 	It("secret not exists and create secret error", func() {
@@ -188,43 +190,43 @@ var _ = Describe("createOrUpdateSecret", func() {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
 
-		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
+		cerr := createOrUpdateSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("secret not exists and create secret succeed", func() {
-		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
+		cerr := createOrUpdateSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
 	})
 
 	It("get secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM(namespace))
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
 
-		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
+		cerr := createOrUpdateSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("update secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM(namespace))
 		fakeClientset.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("update secrets error")
 		})
 
-		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
+		cerr := createOrUpdateSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("update secret succeed", func() {
-		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
-		cerr := createOrUpdateSecret(ctx, fakeClientset, data)
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM(namespace))
+		cerr := createOrUpdateSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
 	})
@@ -234,23 +236,24 @@ var _ = Describe("createOrUpdateSecret", func() {
 var _ = Describe("createOrUpdateWebhook", func() {
 
 	var (
-		ctx    context.Context
-		logger *logrus.Entry
-		client *fake.Clientset
+		ctx       context.Context
+		logger    *logrus.Entry
+		client    *fake.Clientset
+		namespace = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
-		client = fake.NewSimpleClientset(secret(), prepareCM())
+		client = fake.NewSimpleClientset(secret(namespace), prepareCM(namespace))
 	})
 
 	It("create webhook and get secret error", func() {
 		client.PrependReactor("get", "secrets", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
@@ -258,12 +261,12 @@ var _ = Describe("createOrUpdateWebhook", func() {
 		client.PrependReactor("create", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("create webhook succeed", func() {
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).To(BeNil())
 		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
@@ -271,17 +274,17 @@ var _ = Describe("createOrUpdateWebhook", func() {
 	})
 
 	It("update webhook error", func() {
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false), prepareCM())
+		client = fake.NewSimpleClientset(secret(namespace), mutatingWebhookConfiguration(false), prepareCM(namespace))
 		client.PrependReactor("update", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("update webhook succeed", func() {
-		client = fake.NewSimpleClientset(mutatingWebhookConfiguration(true), secret(), prepareCM())
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		client = fake.NewSimpleClientset(mutatingWebhookConfiguration(true), secret(namespace), prepareCM(namespace))
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).To(BeNil())
 		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
@@ -298,8 +301,8 @@ var _ = Describe("createOrUpdateWebhook", func() {
 				},
 			},
 		}
-		client = fake.NewSimpleClientset(webhookConfig, secret(), prepareCM())
-		cerr := createOrUpdateWebhook(ctx, client, false)
+		client = fake.NewSimpleClientset(webhookConfig, secret(namespace), prepareCM(namespace))
+		cerr := createOrUpdateWebhook(ctx, client, false, namespace)
 		Expect(cerr).To(BeNil())
 		webhook, res := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(res).To(BeNil())
@@ -314,32 +317,33 @@ var _ = Describe("cleanupSecretAndWebhook", func() {
 		ctx           context.Context
 		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
 
 	It("delete secret error", func() {
-		fakeClientset = fake.NewSimpleClientset(mutatingWebhookConfiguration(false), prepareCM())
-		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
+		fakeClientset = fake.NewSimpleClientset(mutatingWebhookConfiguration(false), prepareCM(namespace))
+		cerr := cleanupSecretAndWebhook(ctx, fakeClientset, namespace)
 		Expect(cerr).Error()
 	})
 
 	It("delete webhook error", func() {
-		fakeClientset = fake.NewSimpleClientset(secret(), prepareCM())
-		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
-		_, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		fakeClientset = fake.NewSimpleClientset(secret(namespace), prepareCM(namespace))
+		cerr := cleanupSecretAndWebhook(ctx, fakeClientset, namespace)
+		_, err := fakeClientset.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 		Expect(cerr).Error()
 	})
 
 	It("succeed", func() {
-		fakeClientset = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(false), prepareCM())
-		cerr := cleanupSecretAndWebhook(ctx, fakeClientset)
+		fakeClientset = fake.NewSimpleClientset(secret(namespace), mutatingWebhookConfiguration(false), prepareCM(namespace))
+		cerr := cleanupSecretAndWebhook(ctx, fakeClientset, namespace)
 		Expect(cerr).To(BeNil())
 	})
 })
@@ -353,28 +357,29 @@ var _ = Describe("createTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		namespace = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
 
 	It("no secret exists", func() {
-		cerr := createTlsSecret(ctx, fakeClientset, data)
+		cerr := createTlsSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).To(BeNil())
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret).NotTo(BeNil())
 	})
 
 	It("create error", func() {
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 		fakeClientset.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("create secrets error")
 		})
-		cerr := createTlsSecret(ctx, fakeClientset, data)
+		cerr := createTlsSecret(ctx, fakeClientset, data, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 })
@@ -388,13 +393,14 @@ var _ = Describe("updateTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
-		s   = secret()
+		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		namespace = "test"
+		s         = secret(namespace)
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		fakeClientset = fake.NewSimpleClientset(s, prepareCM())
+		fakeClientset = fake.NewSimpleClientset(s, prepareCM(namespace))
 	})
 
 	It("update secret error", func() {
@@ -402,15 +408,15 @@ var _ = Describe("updateTlsSecret", func() {
 			return true, nil, fmt.Errorf("update secrets error")
 		})
 
-		cerr := updateTlsSecret(ctx, fakeClientset, data, s)
+		cerr := updateTlsSecret(ctx, fakeClientset, data, s, namespace)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("update secret succeed", func() {
-		cerr := updateTlsSecret(ctx, fakeClientset, data, s)
+		cerr := updateTlsSecret(ctx, fakeClientset, data, s, namespace)
 		Expect(cerr).To(BeNil())
 
-		secret, err := fakeClientset.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := fakeClientset.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
 		Expect(secret.Data["caCert.pem"]).To(BeEquivalentTo("caCert"))
 	})
@@ -421,22 +427,23 @@ var _ = Describe("getMutatingWebhookConfigFromConfigmap", func() {
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
 		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
 
 	It("success", func() {
-		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true, namespace)
 		Expect(err).To(BeNil())
 		Expect(webhook.Webhooks[0].Name).To(Equal("vpa.k8s.io"))
 	})
 
 	It("get configmap error", func() {
 		fakeClientset = fake.NewSimpleClientset()
-		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true, namespace)
 		Expect(err).NotTo(BeNil())
 		Expect(webhook).To(BeNil())
 	})
@@ -447,7 +454,7 @@ var _ = Describe("getMutatingWebhookConfigFromConfigmap", func() {
 				Name: "webhook-tls-manager-webhook-config",
 			},
 		})
-		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true)
+		webhook, err := getMutatingWebhookConfigFromConfigmap(ctx, fakeClientset, caCertPem, true, namespace)
 		Expect(err).NotTo(BeNil())
 		Expect(webhook).To(BeNil())
 	})
@@ -458,16 +465,17 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
 		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
 
 	It("success", func() {
 		name := "webhook-tls-manager-webhook-config"
-		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
+		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true, namespace)
 		Expect(cerr).To(BeNil())
 		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, name, metav1.GetOptions{})
 		Expect(err).To(BeNil())
@@ -484,7 +492,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 		fakeClientset.PrependReactor("create", "mutatingwebhookconfigurations", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("create webhook error")
 		})
-		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
+		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true, namespace)
 		Expect(cerr).NotTo(BeNil())
 		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).NotTo(BeNil())
@@ -492,7 +500,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 	})
 
 	It("unblock kube-system namespace", func() {
-		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, false)
+		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, false, namespace)
 		Expect(cerr).To(BeNil())
 		webhook, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(err).To(BeNil())
@@ -507,16 +515,17 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 		fakeClientset *fake.Clientset
 		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
 		webhook       *admissionregistration.MutatingWebhookConfiguration
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
 		webhook = mutatingWebhookConfiguration(true)
-		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM())
+		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM(namespace))
 	})
 
 	It("get webhook error", func() {
-		fakeClientset = fake.NewSimpleClientset(prepareCM())
+		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 		cerr := updateMutatingWebhookConfig(ctx, fakeClientset, false, []byte{})
 		Expect(cerr).NotTo(BeNil())
 	})
@@ -531,7 +540,7 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 
 	It("update webhook when kube-system is blocked", func() {
 		webhook.Labels[consts.AdmissionEnforcerDisabledLabel] = "true"
-		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM())
+		fakeClientset = fake.NewSimpleClientset(webhook, prepareCM(namespace))
 		cerr := updateMutatingWebhookConfig(ctx, fakeClientset, true, []byte{})
 		Expect(cerr).To(BeNil())
 		res, err := fakeClientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
@@ -560,6 +569,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		mockctl      *gomock.Controller
 		goalresolver *mock_goal_resolvers.MockWebhookTlsManagerGoalResolverInterface
 		certData     goalresolvers.CertificateData
+		namespace    = "test"
 	)
 
 	BeforeEach(func() {
@@ -567,7 +577,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		logger = log.NewLogger(context.Background())
 		ctx = log.WithLogger(context.TODO(), logger)
 		mockctl = gomock.NewController(GinkgoT())
-		client = fake.NewSimpleClientset(prepareCM())
+		client = fake.NewSimpleClientset(prepareCM(namespace))
 		goalresolver = mock_goal_resolvers.NewMockWebhookTlsManagerGoalResolverInterface(mockctl)
 		certData = goalresolvers.CertificateData{
 			CaCertPem:     []byte("CaCertPem"),
@@ -581,7 +591,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		rerr := errors.New("GenerateCertificates error")
 		goalresolver.EXPECT().Resolve(ctx).Return(nil, &rerr).AnyTimes()
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		err := reconciler.Reconcile(ctx)
 
 		Expect(err).NotTo(BeNil())
@@ -595,7 +605,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).Error()
@@ -609,8 +619,8 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
 
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM())
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		client = fake.NewSimpleClientset(secret(namespace), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM(namespace))
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).To(BeNil())
@@ -625,8 +635,8 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
-		client = fake.NewSimpleClientset(secret(), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM())
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		client = fake.NewSimpleClientset(secret(namespace), mutatingWebhookConfiguration(goal.IsKubeSystemNamespaceBlocked), prepareCM(namespace))
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).To(BeNil())
@@ -636,7 +646,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		Expect(webhook).NotTo(BeNil())
 		Expect(webhook.Webhooks[0].ClientConfig.CABundle).To(BeEquivalentTo(goal.CertData.CaCertPem))
 		Expect(err).To(BeNil())
-		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := client.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(secret).NotTo(BeNil())
 		Expect(err).To(BeNil())
 	})
@@ -649,7 +659,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil)
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).To(BeNil())
@@ -657,7 +667,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 		webhook, err := client.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(ctx, utils.WebhookConfigName(), metav1.GetOptions{})
 		Expect(webhook).NotTo(BeNil())
 		Expect(err).To(BeNil())
-		secret, err := client.CoreV1().Secrets(metav1.NamespaceSystem).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+		secret, err := client.CoreV1().Secrets(namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 		Expect(secret).NotTo(BeNil())
 		Expect(err).To(BeNil())
 	})
@@ -673,7 +683,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 			return true, nil, fmt.Errorf("error")
 		})
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).NotTo(BeNil())
@@ -690,7 +700,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 			return true, nil, fmt.Errorf("error")
 		})
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).NotTo(BeNil())
@@ -703,12 +713,12 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 			IsWebhookTlsManagerEnabled:   true,
 		}
 		goalresolver.EXPECT().Resolve(ctx).Return(&goal, nil).AnyTimes()
-		client = fake.NewSimpleClientset(secret(), prepareCM())
+		client = fake.NewSimpleClientset(secret(namespace), prepareCM(namespace))
 		client.PrependReactor("get", "mutatingwebhookconfigurations", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, fmt.Errorf("error")
 		})
 
-		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client)
+		reconciler := NewWebhookTlsManagerReconciler(goalresolver, client, namespace)
 		cerr := reconciler.Reconcile(ctx)
 
 		Expect(cerr).NotTo(BeNil())
@@ -789,11 +799,11 @@ func mutatingWebhookConfiguration(systemNamespaceBlocked bool) *admissionregistr
 	}
 }
 
-func secret() *corev1.Secret {
+func secret(namespace string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "webhook-tls-manager-tls-certs",
-			Namespace: metav1.NamespaceSystem,
+			Namespace: namespace,
 		},
 		Data: map[string][]byte{
 			"caCert.pem":     []byte("testCaCert"),
@@ -804,7 +814,7 @@ func secret() *corev1.Secret {
 	}
 }
 
-func prepareCM() *corev1.ConfigMap {
+func prepareCM(namespace string) *corev1.ConfigMap {
 	cmData := `
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -847,7 +857,7 @@ webhooks:
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "webhook-tls-manager-webhook-config",
-			Namespace: metav1.NamespaceSystem,
+			Namespace: namespace,
 		},
 		Data: map[string]string{
 			"mutatingWebhookConfig": cmData,
