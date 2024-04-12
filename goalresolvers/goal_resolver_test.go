@@ -24,8 +24,8 @@ import (
 var _ = Describe("shouldRotateCert", func() {
 	var (
 		fakeClientset *fake.Clientset
-
-		ctx = log.WithLogger(context.Background(), log.NewLogger(context.Background()))
+		namespace     = "test"
+		ctx           = log.WithLogger(context.Background(), log.NewLogger(context.Background()))
 	)
 
 	BeforeEach(func() {
@@ -34,7 +34,7 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 
 	It("cert secret doesn't exist", func() {
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
@@ -44,16 +44,16 @@ var _ = Describe("shouldRotateCert", func() {
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		_, err := resolver.shouldRotateCert(ctx)
 		Expect(err).NotTo(BeNil())
 	})
 
 	It("cert expired", func() {
 		expiredCert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 15))
-		secret := generateSecret(expiredCert)
+		secret := generateSecret(expiredCert, namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
@@ -61,9 +61,9 @@ var _ = Describe("shouldRotateCert", func() {
 
 	It("cert unexpired", func() {
 		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
-		secret := generateSecret(cert)
+		secret := generateSecret(cert, namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeFalse())
@@ -77,13 +77,13 @@ var _ = Describe("shouldRotateCert", func() {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      utils.SecretName(),
-				Namespace: metav1.NamespaceSystem,
+				Namespace: namespace,
 			},
 			Data: map[string][]byte{},
 			Type: "Opaque",
 		}
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeFalse())
@@ -96,6 +96,7 @@ var _ = Describe("generateCertificates", func() {
 		ctx           context.Context
 		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
@@ -105,7 +106,7 @@ var _ = Describe("generateCertificates", func() {
 	})
 
 	It("succeed", func() {
-		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		data, err := g.generateCertificates(ctx)
 		Expect(err).To(BeNil())
 		Expect(data.ServerCertPem).NotTo(BeNil())
@@ -121,6 +122,7 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 		ctx           context.Context
 		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
+		namespace     = "test"
 	)
 
 	BeforeEach(func() {
@@ -134,16 +136,16 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
 		_, cerr := resolver.Resolve(ctx)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("resolve succeed: don't rotate cert", func() {
 		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
-		secret := generateSecret(cert)
+		secret := generateSecret(cert, namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace)
 		goal, cerr := resolver.Resolve(ctx)
 		Expect(cerr).To(BeNil())
 		Expect(goal.CertData).To(BeNil())
@@ -151,14 +153,14 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 
 	It("resolve succeed: new cert", func() {
 		fakeClientset = fake.NewSimpleClientset()
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace)
 		goal, cerr := resolver.Resolve(ctx)
 		Expect(cerr).To(BeNil())
 		Expect(goal.CertData).NotTo(BeNil())
 	})
 })
 
-func generateSecret(cert string) *corev1.Secret {
+func generateSecret(cert string, namespace string) *corev1.Secret {
 	return &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Secret",
@@ -166,7 +168,7 @@ func generateSecret(cert string) *corev1.Secret {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      utils.SecretName(),
-			Namespace: metav1.NamespaceSystem,
+			Namespace: namespace,
 			Labels: map[string]string{
 				consts.ManagedLabelKey: consts.ManagedLabelValue,
 			},
