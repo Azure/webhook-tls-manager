@@ -51,7 +51,7 @@ func main() {
 		}
 	}()
 
-	webhookGoalResolver := goalresolvers.NewWebhookTlsManagerGoalResolver(ctx, kubeClient, *kubeSystemNamespaceBlocked, *webhookTlsManagerEnabled)
+	webhookGoalResolver := goalresolvers.NewWebhookTlsManagerGoalResolver(ctx, kubeClient, *kubeSystemNamespaceBlocked, *webhookTlsManagerEnabled, *namespace)
 	webhookTlsManagerReconciler := reconcilers.NewWebhookTlsManagerReconciler(webhookGoalResolver, kubeClient, *namespace)
 
 	cerr := webhookTlsManagerReconciler.Reconcile(ctx)
