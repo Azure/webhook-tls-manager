@@ -25,7 +25,7 @@ var _ = Describe("shouldRotateCert", func() {
 	var (
 		fakeClientset *fake.Clientset
 		namespace     = "test"
-		ctx           = log.WithLogger(context.Background(), log.NewLogger(context.Background()))
+		ctx           = log.WithLogger(context.Background(), log.NewLogger(context.Background(), 3))
 	)
 
 	BeforeEach(func() {
@@ -100,7 +100,7 @@ var _ = Describe("generateCertificates", func() {
 	)
 
 	BeforeEach(func() {
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		fakeClientset = fake.NewSimpleClientset()
 	})
@@ -126,7 +126,7 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 	)
 
 	BeforeEach(func() {
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		fakeClientset = fake.NewSimpleClientset()
 	})

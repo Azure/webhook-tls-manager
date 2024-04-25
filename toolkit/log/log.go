@@ -41,8 +41,16 @@ func getEpochRandomString() (string, error) {
 	return string(randomBytes), nil
 }
 
-func NewLogger(ctx context.Context) *logrus.Entry {
+func NewLogger(ctx context.Context, loggerLevel int) *logrus.Entry {
 	logger := logrus.New()
+	switch loggerLevel {
+	case 4:
+		logger.SetLevel(logrus.DebugLevel)
+	case 5:
+		logger.SetLevel(logrus.TraceLevel)
+	default:
+		logger.SetLevel(logrus.InfoLevel)
+	}
 	logger.Formatter = &logrus.JSONFormatter{}
 	epoch, _ := getEpochRandomString()
 	return logger.WithField(epochFieldName, epoch)

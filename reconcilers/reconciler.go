@@ -67,9 +67,10 @@ func shouldUpdateWebhook(ctx context.Context, webhookConfig *admissionregistrati
 	}
 	caCert := secret.Data["caCert.pem"]
 	if len(webhookConfig.Webhooks) == 0 ||
-		(len(webhookConfig.Webhooks[0].ClientConfig.CABundle) != 0) ||
 		!bytes.Equal(webhookConfig.Webhooks[0].ClientConfig.CABundle, caCert) {
 		logger.Info("update webhookConfig for CABundle")
+		logger.Debugf("webhookConfig.Webhooks[0].ClientConfig.CABundle: %x", webhookConfig.Webhooks[0].ClientConfig.CABundle)
+		logger.Debugf("caCert: %x", caCert)
 		return true, nil
 	}
 	webhookConfigFromConfig, err := getMutatingWebhookConfigFromConfigmap(ctx, clientset, caCert, isKubeSystemNamespaceBlocked, namespace)
@@ -307,6 +308,7 @@ func updateMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Inter
 		logger.Infof("fail to get mutating webhook config %s. error: %s", utils.WebhookConfigName(), getErr)
 		return &getErr
 	}
+	logger.Debugf("webhook before update: %v", webhook)
 	if !isKubeSystemNamespaceBlocked {
 		logger.Info(ctx, "update label since kube-system is unblocked.")
 		webhook.Labels[consts.AdmissionEnforcerDisabledLabel] = consts.AdmissionEnforcerDisabledValue

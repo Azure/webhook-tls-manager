@@ -71,7 +71,7 @@ var _ = Describe("CertCreator", func() {
 
 	Describe("CreateCertificateWithPublicKey", func() {
 		It("should return a certificate", func() {
-			logger := log.NewLogger(context.Background())
+			logger := log.NewLogger(context.Background(), 3)
 			ctx := log.WithLogger(context.Background(), logger)
 			cert, err := certCreator.CreateCertificateWithPublicKey(ctx, template, publicKey, template, privateKey)
 			Expect(err).To(BeNil())
