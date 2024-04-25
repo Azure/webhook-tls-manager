@@ -14,7 +14,7 @@ var _ = Describe(
 	"Logger functionality",
 	func() {
 		It("NewLogger", func() {
-			logger := NewLogger(context.Background())
+			logger := NewLogger(context.Background(), 3)
 			buf := &bytes.Buffer{}
 			logger.Logger.SetOutput(buf)
 			logger.Info("test")
@@ -23,7 +23,7 @@ var _ = Describe(
 		})
 
 		It("context with logger", func() {
-			logger := NewLogger(context.Background())
+			logger := NewLogger(context.Background(), 3)
 			ctx := WithLogger(context.Background(), logger)
 			Expect(ctx).NotTo(BeNil())
 			logger = MustGetLogger(ctx)

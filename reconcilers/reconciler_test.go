@@ -44,7 +44,7 @@ var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		currentMutatingWebhooks = []admissionregistration.MutatingWebhook{
 			{
@@ -134,7 +134,7 @@ var _ = Describe("shouldUpdateWebhook", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		s = secret(namespace)
 		client = fake.NewSimpleClientset(s, prepareCM(namespace))
@@ -174,7 +174,7 @@ var _ = Describe("createOrUpdateSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		logger    = log.NewLogger(context.Background())
+		logger    = log.NewLogger(context.Background(), 3)
 		ctx       = log.WithLogger(context.TODO(), logger)
 		namespace = "test"
 		s         = secret(namespace)
@@ -244,7 +244,7 @@ var _ = Describe("createOrUpdateWebhook", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.TODO(), logger)
 		client = fake.NewSimpleClientset(secret(namespace), prepareCM(namespace))
 	})
@@ -322,7 +322,7 @@ var _ = Describe("cleanupSecretAndWebhook", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.TODO(), logger)
 		fakeClientset = fake.NewSimpleClientset(prepareCM(namespace))
 	})
@@ -357,7 +357,7 @@ var _ = Describe("createTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
 		namespace = "test"
 	)
 
@@ -393,7 +393,7 @@ var _ = Describe("updateTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx       = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
 		namespace = "test"
 		s         = secret(namespace)
 	)
@@ -426,7 +426,7 @@ var _ = Describe("getMutatingWebhookConfigFromConfigmap", func() {
 	var (
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
 		namespace     = "test"
 	)
 
@@ -464,7 +464,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 	var (
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
 		namespace     = "test"
 	)
 
@@ -513,7 +513,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 var _ = Describe("updateMutatingWebhookConfig test", func() {
 	var (
 		fakeClientset *fake.Clientset
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background()))
+		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
 		webhook       *admissionregistration.MutatingWebhookConfiguration
 		namespace     = "test"
 	)
@@ -574,7 +574,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background())
+		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.TODO(), logger)
 		mockctl = gomock.NewController(GinkgoT())
 		client = fake.NewSimpleClientset(prepareCM(namespace))

@@ -21,11 +21,12 @@ var (
 	getKubeClientFunc          = utils.GetKubeClient
 	webhookTlsManagerEnabled   = flag.Bool("webhook-tls-manager-enabled", true, "if set to false, it will cleanup webhook tls manager secrets and webhook.")
 	kubeSystemNamespaceBlocked = flag.Bool("kube-system-namespace-blocked", false, "if set to false, all of the objects under kube-system namespace will be applied by the webhook.")
-	namespace				  = flag.String("namespace", "", "the namespace of the object to be reconciled")
+	namespace                  = flag.String("namespace", "", "the namespace of the object to be reconciled")
 	addr                       = ":8943"
 	objectName                 = flag.String("webhook-tls-manager-managed-object-name", "", "the name of the object to be reconciled")
 	caValidityYears            = flag.Int("ca-validity-years", 0, "the validity of the CA certificate in years")
 	serverValidityYears        = flag.Int("server-validity-years", 0, "the validity of the server certificate in years")
+	logLevel                   = flag.Int("log-level", 3, "log level")
 )
 
 func main() {
@@ -33,7 +34,7 @@ func main() {
 	flag.Parse()
 	config.NewConfig()
 	config.UpdateConfig(*objectName, *caValidityYears, *serverValidityYears)
-	logger := log.NewLogger(context.Background())
+	logger := log.NewLogger(context.Background(), *logLevel)
 	ctx := log.WithLogger(context.TODO(), logger)
 	var label prometheus.Labels
 	if *webhookTlsManagerEnabled {
