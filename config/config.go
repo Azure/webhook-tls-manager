@@ -8,6 +8,7 @@ type Config struct {
 	ObjectName          string
 	CaValidityYears     int
 	ServerValidityYears int
+	Namespace           string
 }
 
 var AppConfig Config
@@ -17,10 +18,11 @@ func NewConfig() {
 		ObjectName:          "webhook-tls-manager",
 		CaValidityYears:     certificates.CaValidityYears,
 		ServerValidityYears: certificates.ServerValidityYears,
+		Namespace:           "kube-system",
 	}
 }
 
-func UpdateConfig(objectName string, caValidityYears int, serverValidityYears int) {
+func UpdateConfig(objectName string, caValidityYears int, serverValidityYears int, namespace string) {
 	if objectName != "" {
 		AppConfig.ObjectName = objectName
 	}
@@ -29,5 +31,8 @@ func UpdateConfig(objectName string, caValidityYears int, serverValidityYears in
 	}
 	if serverValidityYears != 0 {
 		AppConfig.ServerValidityYears = serverValidityYears
+	}
+	if namespace != "" {
+		AppConfig.Namespace = namespace
 	}
 }

@@ -33,7 +33,7 @@ func main() {
 
 	flag.Parse()
 	config.NewConfig()
-	config.UpdateConfig(*objectName, *caValidityYears, *serverValidityYears)
+	config.UpdateConfig(*objectName, *caValidityYears, *serverValidityYears, *namespace)
 	logger := log.NewLogger(context.Background(), *logLevel)
 	ctx := log.WithLogger(context.TODO(), logger)
 	var label prometheus.Labels
@@ -52,8 +52,8 @@ func main() {
 		}
 	}()
 
-	webhookGoalResolver := goalresolvers.NewWebhookTlsManagerGoalResolver(ctx, kubeClient, *kubeSystemNamespaceBlocked, *webhookTlsManagerEnabled, *namespace)
-	webhookTlsManagerReconciler := reconcilers.NewWebhookTlsManagerReconciler(webhookGoalResolver, kubeClient, *namespace)
+	webhookGoalResolver := goalresolvers.NewWebhookTlsManagerGoalResolver(ctx, kubeClient, *kubeSystemNamespaceBlocked, *webhookTlsManagerEnabled)
+	webhookTlsManagerReconciler := reconcilers.NewWebhookTlsManagerReconciler(webhookGoalResolver, kubeClient)
 
 	cerr := webhookTlsManagerReconciler.Reconcile(ctx)
 	if cerr != nil {

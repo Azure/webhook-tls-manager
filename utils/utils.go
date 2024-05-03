@@ -36,7 +36,7 @@ func CACertificateCommonName() string {
 }
 
 func ServerCertificateCommonName() string {
-	return config.AppConfig.ObjectName + "-webhook.kube-system.svc"
+	return config.AppConfig.ObjectName + "-webhook." + config.AppConfig.Namespace + ".svc"
 }
 
 func MetricsPrefix() string {
