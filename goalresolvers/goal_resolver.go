@@ -38,14 +38,13 @@ type webhookTlsManagerGoalResolver struct {
 	kubeClient                   kubernetes.Interface
 	isKubeSystemNamespaceBlocked bool
 	IsWebhookTlsManagerEnabled   bool
-	namespace                    string
 }
 
 func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (bool, *error) {
 
 	logger := log.MustGetLogger(ctx)
 
-	secret, getErr := g.kubeClient.CoreV1().Secrets(g.namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
+	secret, getErr := g.kubeClient.CoreV1().Secrets(config.AppConfig.Namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if k8serrors.IsNotFound(getErr) {
 		logger.Infof("secret %s not exists", utils.SecretName())
 		return true, nil
@@ -123,7 +122,7 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 	}, nil
 }
 
-func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsWebhookTlsManagerEnabled bool, namespace string) WebhookTlsManagerGoalResolverInterface {
+func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsWebhookTlsManagerEnabled bool) WebhookTlsManagerGoalResolverInterface {
 	logger := log.MustGetLogger(ctx)
 	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", isKubeSystemNamespaceBlocked, IsWebhookTlsManagerEnabled)
 	generator := certgenerator.NewCertGenerator(certcreator.NewCertCreator())
@@ -133,7 +132,6 @@ func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes
 		kubeClient:                   kubeClient,
 		isKubeSystemNamespaceBlocked: isKubeSystemNamespaceBlocked,
 		IsWebhookTlsManagerEnabled:   IsWebhookTlsManagerEnabled,
-		namespace:                    namespace,
 	}
 }
 

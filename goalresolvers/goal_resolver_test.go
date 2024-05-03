@@ -24,7 +24,6 @@ import (
 var _ = Describe("shouldRotateCert", func() {
 	var (
 		fakeClientset *fake.Clientset
-		namespace     = "test"
 		ctx           = log.WithLogger(context.Background(), log.NewLogger(context.Background(), 3))
 	)
 
@@ -34,7 +33,7 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 
 	It("cert secret doesn't exist", func() {
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
@@ -44,16 +43,16 @@ var _ = Describe("shouldRotateCert", func() {
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		_, err := resolver.shouldRotateCert(ctx)
 		Expect(err).NotTo(BeNil())
 	})
 
 	It("cert expired", func() {
 		expiredCert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 15))
-		secret := generateSecret(expiredCert, namespace)
+		secret := generateSecret(expiredCert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeTrue())
@@ -61,9 +60,9 @@ var _ = Describe("shouldRotateCert", func() {
 
 	It("cert unexpired", func() {
 		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
-		secret := generateSecret(cert, namespace)
+		secret := generateSecret(cert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeFalse())
@@ -77,13 +76,13 @@ var _ = Describe("shouldRotateCert", func() {
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      utils.SecretName(),
-				Namespace: namespace,
+				Namespace: config.AppConfig.Namespace,
 			},
 			Data: map[string][]byte{},
 			Type: "Opaque",
 		}
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeFalse())
@@ -96,17 +95,17 @@ var _ = Describe("generateCertificates", func() {
 		ctx           context.Context
 		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
-		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
 	})
 
 	It("succeed", func() {
-		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		g := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		data, err := g.generateCertificates(ctx)
 		Expect(err).To(BeNil())
 		Expect(data.ServerCertPem).NotTo(BeNil())
@@ -122,13 +121,13 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 		ctx           context.Context
 		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
-		namespace     = "test"
 	)
 
 	BeforeEach(func() {
 		logger = log.NewLogger(context.Background(), 3)
 		ctx = log.WithLogger(context.Background(), logger)
 		fakeClientset = fake.NewSimpleClientset()
+		config.NewConfig()
 	})
 
 	It("resolve fails: shouldRotateCert error", func() {
@@ -136,16 +135,16 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 		fakeClientset.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, fmt.Errorf("get secrets error")
 		})
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace).(*webhookTlsManagerGoalResolver)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		_, cerr := resolver.Resolve(ctx)
 		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("resolve succeed: don't rotate cert", func() {
 		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
-		secret := generateSecret(cert, namespace)
+		secret := generateSecret(cert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true)
 		goal, cerr := resolver.Resolve(ctx)
 		Expect(cerr).To(BeNil())
 		Expect(goal.CertData).To(BeNil())
@@ -153,7 +152,7 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 
 	It("resolve succeed: new cert", func() {
 		fakeClientset = fake.NewSimpleClientset()
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true, namespace)
+		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true)
 		goal, cerr := resolver.Resolve(ctx)
 		Expect(cerr).To(BeNil())
 		Expect(goal.CertData).NotTo(BeNil())
