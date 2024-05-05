@@ -43,6 +43,7 @@ type webhookTlsManagerGoalResolver struct {
 func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (bool, *error) {
 
 	logger := log.MustGetLogger(ctx)
+	logger.Infof("config is %v", config.AppConfig)
 
 	secret, getErr := g.kubeClient.CoreV1().Secrets(config.AppConfig.Namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if k8serrors.IsNotFound(getErr) {

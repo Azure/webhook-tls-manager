@@ -812,47 +812,49 @@ func prepareCM(namespace string) *corev1.ConfigMap {
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-    name: webhook-tls-manager-webhook-config
+  name: webhook-tls-manager-webhook-config
+  labels:
+    app.kubernetes.io/managed-by: aks
 webhooks:
-  - admissionReviewVersions:
-      - v1
-    clientConfig:
-      service:
-        name: webhook-tls-manager-webhook-config
-        namespace: kube-system
-        port: 443
-    failurePolicy: Ignore
-    matchPolicy: Equivalent
-    name: vpa.k8s.io
-    sideEffects: None
-    timeoutSeconds: 3
-    namespaceSelector:
-        matchExpressions:
-          - key: overlay-ccp-id
-            operator: Exists
-    objectSelector:
-        matchLabels:
-            auto-vpa: "enabled"
-    rules:
-      - apiGroups:
-          - ""
-        apiVersions:
-          - v1
-        operations:
-          - CREATE
-        resources:
-          - pods
-        scope: '*'
-      - apiGroups:
-        - autoscaling.k8s.io
-        apiVersions:
-          - '*'
-        operations:
-          - CREATE
-          - UPDATE
-        resources:
-          - verticalpodautoscalers
-        scope: '*'
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: vpa-webhook
+      namespace: vpa-recommender
+      port: 443
+  failurePolicy: Ignore
+  matchPolicy: Equivalent
+  name: vpa.k8s.io
+  sideEffects: None
+  timeoutSeconds: 3
+  namespaceSelector:
+    matchExpressions:
+      - key: overlay-ccp-id
+        operator: Exists
+  objectSelector:
+    matchLabels:
+      auto-vpa: "enabled"
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+    scope: '*'
+  - apiGroups:
+    - autoscaling.k8s.io
+    apiVersions:
+    - '*'
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - verticalpodautoscalers
+    scope: '*'
 `
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

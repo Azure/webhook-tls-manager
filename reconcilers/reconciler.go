@@ -34,10 +34,23 @@ func currentWebhookConfigAndConfigmapDifferent(ctx context.Context, currentWebho
 	// Because the reflect.DeepEqual function is impacted by the order of array elements.
 	webhookConfigFromConfig *admissionregistration.MutatingWebhookConfiguration) bool {
 	logger := log.MustGetLogger(ctx)
-	if !reflect.DeepEqual(currentWebhookConfig, webhookConfigFromConfig) {
-		logger.Info("currentWebhookConfig different from webhookConfigFromConfig")
+	if !reflect.DeepEqual(currentWebhookConfig.ObjectMeta.Labels, webhookConfigFromConfig.ObjectMeta.Labels) {
+		logger.Info("currentWebhookConfig.ObjectMeta different from webhookConfigFromConfig.ObjectMeta.Labels")
+		logger.Debugf("currentWebhookConfig.ObjectMeta.Labels: %v", currentWebhookConfig.ObjectMeta.Labels)
+		logger.Debugf("webhookConfigFromConfig.ObjectMeta.Labels: %v", webhookConfigFromConfig.ObjectMeta.Labels)
 		return true
 	}
+	if !reflect.DeepEqual(currentWebhookConfig.Webhooks[0].ClientConfig.Service, webhookConfigFromConfig.Webhooks[0].ClientConfig.Service) ||
+		!reflect.DeepEqual(currentWebhookConfig.Webhooks[0].Name, webhookConfigFromConfig.Webhooks[0].Name) ||
+		!reflect.DeepEqual(currentWebhookConfig.Webhooks[0].NamespaceSelector, webhookConfigFromConfig.Webhooks[0].NamespaceSelector) ||
+		!reflect.DeepEqual(currentWebhookConfig.Webhooks[0].ObjectSelector, webhookConfigFromConfig.Webhooks[0].ObjectSelector) ||
+		!reflect.DeepEqual(currentWebhookConfig.Webhooks[0].Rules, webhookConfigFromConfig.Webhooks[0].Rules) {
+		logger.Info("currentWebhookConfig.Webhooks[0] different from webhookConfigFromConfig.Webhooks[0]")
+		logger.Debugf("currentWebhookConfig.Webhooks[0]: %v", currentWebhookConfig.Webhooks[0])
+		logger.Debugf("webhookConfigFromConfig.Webhooks[0]: %v", webhookConfigFromConfig.Webhooks[0])
+		return true
+	}
+	
 	return false
 }
 
@@ -242,6 +255,7 @@ func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubern
 		return nil, &err
 	}
 	logger.Infof("get webhook-config configmap succeed.")
+	logger.Debugf("configmap: %v", cm)
 
 	mutatingWebhookConfigJson := cm.Data["mutatingWebhookConfig"]
 	if mutatingWebhookConfigJson == "" {
@@ -250,6 +264,7 @@ func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubern
 		return nil, &err
 	}
 	logger.Infof("get mutatingWebhookConfig succeed. mutatingWebhookConfig: %s", mutatingWebhookConfigJson)
+	logger.Debugf("mutatingWebhookConfig: %s", mutatingWebhookConfigJson)
 	var mutatingWebhookConfig admissionregistration.MutatingWebhookConfiguration
 	err = yaml.NewYAMLOrJSONDecoder(strings.NewReader(mutatingWebhookConfigJson), 1024).Decode(&mutatingWebhookConfig)
 	if err != nil {
@@ -257,6 +272,7 @@ func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubern
 		return nil, &err
 	}
 	logger.Infof("unmarshal mutatingWebhookConfig succeed.")
+	logger.Debugf("mutatingWebhookConfig: %v", mutatingWebhookConfig)
 
 	for i := range mutatingWebhookConfig.Webhooks {
 		mutatingWebhookConfig.Webhooks[i].ClientConfig.CABundle = caCert
@@ -275,6 +291,7 @@ func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubern
 		}
 	}
 	mutatingWebhookConfig.Labels = labels
+	logger.Debugf("mutatingWebhookConfig from configmap: %v", mutatingWebhookConfig)
 
 	return &mutatingWebhookConfig, nil
 }
@@ -308,21 +325,17 @@ func updateMutatingWebhookConfig(ctx context.Context, clientset kubernetes.Inter
 		logger.Infof("fail to get mutating webhook config %s. error: %s", utils.WebhookConfigName(), getErr)
 		return &getErr
 	}
+	webhookFromCm, readErr := getMutatingWebhookConfigFromConfigmap(ctx, clientset, data, isKubeSystemNamespaceBlocked)
+	if readErr != nil {
+		logger.Infof("fail to get mutating webhook config from configmap. error: %s", *readErr)
+		return readErr
+	}
+	webhook.ObjectMeta.Labels = webhookFromCm.ObjectMeta.Labels
+	webhook.Webhooks = webhookFromCm.Webhooks
 	logger.Debugf("webhook before update: %v", webhook)
-	if !isKubeSystemNamespaceBlocked {
-		logger.Info(ctx, "update label since kube-system is unblocked.")
-		webhook.Labels[consts.AdmissionEnforcerDisabledLabel] = consts.AdmissionEnforcerDisabledValue
-		webhook.Webhooks[0].NamespaceSelector = &metav1.LabelSelector{}
-	} else {
-		logger.Info(ctx, "update label since kube-system is blocked.")
-		delete(webhook.Labels, consts.AdmissionEnforcerDisabledLabel)
-	}
-	if data != nil {
-		webhook.Webhooks[0].ClientConfig.CABundle = data
-	}
 	_, updateErr := client.Update(ctx, webhook, metav1.UpdateOptions{})
 	if updateErr != nil {
-		logger.Infof("fail to update mutating webhook config %s. error: %s", utils.WebhookConfigName(), getErr)
+		logger.Infof("fail to update mutating webhook config %s. error: %s", utils.WebhookConfigName(), updateErr)
 		return &updateErr
 	}
 	return nil
