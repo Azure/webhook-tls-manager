@@ -4,18 +4,30 @@ Webhook-tls-manager is a Kubernetes component that manages webhooks and related 
 
 ## Overview
 
-Webhook-tls-manager simplifies the management of webhooks and certificates in Kubernetes. It provides functionality to create webhook configurations and certificates, rotate expired certificates, reconcile webhook configurations and secrets, and clean up webhook configurations and certificates.
+Webhook-tls-manager simplifies the management of webhooks and certificates in Kubernetes. It provides functionality to **create webhook configurations and certificates, rotate expired certificates, reconcile webhook configurations and secrets, and clean up webhook configurations and certificates**.
 
 ## Examples
 
-Check out the `examples` folder for sample configurations and deployment files.
+### Build image
+```
+export REGISTRY=alexhzf/webhook-tls-manager
+export TAG=0.0.1
+make docker-build
+```
+
+### Deploy charts through helm
+Check out the `examples` folder for sample configurations and deployment files. The command uses helm to install a helm release. The configmap containing the mutating webhook configuration is in sample-cm.yaml. The `vpa-cert-webhook-check job` will create a secret with the certificate named as `vpa-tls-certs` and MutatingWebhookConfiguration `vpa-webhook-config`.
 
 ```
 helm package examples/vpa-helm-chart
 helm install vpa vpa-helm-chart-0.1.1.tgz -n kube-system
 ```
 
-The above command uses helm to deploy the charts. The configmap containing the mutating webhook configuration is in sample-cm.yaml.
+### Remove the helm release
+A job `vpa-cert-webhook-cleanup` will be created to remove the secret and webhook.
+```
+helm uninstall vpa -n kube-system
+```
 
 ## Contributing
 
