@@ -104,7 +104,17 @@ var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
 		config.NewConfig()
 	})
 
-	It("different", func() {
+	It("different label", func() {
+		currentWebhookConfig = mutatingWebhookConfiguration(true)
+		webhookConfigFromConfigmap = mutatingWebhookConfiguration(true)
+		webhookConfigFromConfigmap.Labels = map[string]string{
+			"test": "test",
+		}
+		res := currentWebhookConfigAndConfigmapDifferent(ctx, currentWebhookConfig, webhookConfigFromConfigmap)
+		Expect(res).To(BeTrue())
+	})
+
+	It("different fields", func() {
 		currentWebhookConfig = mutatingWebhookConfiguration(true)
 		webhookConfigFromConfigmap = mutatingWebhookConfiguration(true)
 		currentWebhookConfig.Webhooks = currentMutatingWebhooks
@@ -481,6 +491,20 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 		val, keyExist := webhook.ObjectMeta.Labels[consts.ManagedLabelKey]
 		Expect(keyExist).To(BeTrue())
 		Expect(val).To(BeEquivalentTo(consts.ManagedLabelValue))
+	})
+
+	It("mutatingWebhookConfig is empty", func() {
+		cm := prepareCM(config.AppConfig.Namespace)
+		cm.Data["mutatingWebhookConfig"] = ""
+		fakeClientset = fake.NewSimpleClientset(cm)
+		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
+		Expect(cerr).NotTo(BeNil())
+	})
+
+	It("getMutatingWebhookConfigFromConfigmap error", func() {
+		fakeClientset = fake.NewSimpleClientset()
+		cerr := createMutatingWebhookConfig(ctx, fakeClientset, caCertPem, true)
+		Expect(cerr).NotTo(BeNil())
 	})
 
 	It("create error", func() {
