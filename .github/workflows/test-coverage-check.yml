@@ -1,0 +1,41 @@
+name: Test Coverage Check
+
+on:
+  pull_request:
+    branches:
+      - main  # Adjust to your target branch
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.x'  # Adjust based on your project requirements
+
+      - name: Run tests with coverage
+        run: |
+          go test -coverprofile=coverage.out ./...
+          grep -v -e "/mock_" -e "main.go" coverage.out > filtered_coverage.out
+          go tool cover -func=filtered_coverage.out | tail -n 1 | awk '{print $3}' | sed 's/%//' > coverage.txt
+
+      - name: Fail if coverage is below threshold
+        id: check_coverage
+        run: |
+          COVERAGE=$(cat coverage.txt)
+          echo "Total Coverage: $COVERAGE%"
+          if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
+            echo "Test coverage ($COVERAGE%) is below the required threshold (80%)"
+            exit 1
+          fi
+
+      - name: Upload coverage report (optional)
+        uses: actions/upload-artifact@v3
+        with:
+          name: filtered-coverage
+          path: filtered_coverage.out
