@@ -34,7 +34,6 @@ func (c *certificateGeneratorImp) CreateSelfSignedCertificateKeyPair(ctx context
 	logger := log.MustGetLogger(ctx)
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, KeySize)
-	// privateKey, err := c.ensureHasKey(ctx, logger)
 	if err != nil {
 		logger.Errorf("rsa.GenerateKeyfailed: %s", err)
 		return nil, nil, retry.NewError(true, err)
