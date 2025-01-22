@@ -25,7 +25,6 @@ rules:
     resources: [ "mutatingwebhookconfigurations"]
     resourceNames:
     - {{ .Values.componentName }}-webhook-config
-    # resourceNames: ["*-webhook-config"]
     verbs: [ "get", "delete", "update"]
   - apiGroups: [ "admissionregistration.k8s.io"]
     resources: [ "mutatingwebhookconfigurations"]
@@ -45,7 +44,6 @@ rules:
     resources: ["secrets"]
     resourceNames:
     - {{ .Values.componentName }}-tls-certs
-    # resourceNames: ["*-tls-certs"]
     verbs: ["get", "update", "delete"]
   - apiGroups: [""]
     resources: ["secrets"]
@@ -104,8 +102,6 @@ spec:
       serviceAccountName: vpa-webhook-generation
       containers:
         - name: vpa-webhook-generation
-          # image: "mcr.microsoft.com/aks/ccp/overlay-vpa-webhook-generation:master.230714.2"
-          # image: "vpatest.azurecr.io/public/aks/ccp/overlay-vpa-webhook-generation:zhifanhui-local-1696550220-linux-amd64"
           image: alexhzf/webhook-tls-manager:0.0.1
           imagePullPolicy: Always
           command:
@@ -131,8 +127,6 @@ spec:
       serviceAccountName: vpa-webhook-generation
       containers:
         - name: vpa-webhook-generation
-          # image: "mcr.microsoft.com/aks/ccp/overlay-vpa-webhook-generation:master.230714.2"
-          # image: "vpatest.azurecr.io/public/aks/ccp/overlay-vpa-webhook-generation:zhifanhui-local-1696534395-linux-amd64"
           image: alexhzf/webhook-tls-manager:0.0.1
           imagePullPolicy: Always
           command:
