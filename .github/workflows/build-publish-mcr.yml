@@ -13,7 +13,8 @@ permissions:
   contents: read  # This is required for actions/checkout
 
 env:
-  REGISTRY_REPO: unlisted/aks/webhook-tls-manager
+  # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
+  REGISTRY_REPO: public/aks/webhook-tls-manager
 
 jobs:
   prepare-variables:
