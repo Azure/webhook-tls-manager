@@ -50,7 +50,7 @@ func currentWebhookConfigAndConfigmapDifferent(ctx context.Context, currentWebho
 		logger.Debugf("webhookConfigFromConfig.Webhooks[0]: %v", webhookConfigFromConfig.Webhooks[0])
 		return true
 	}
-	
+
 	return false
 }
 
@@ -147,7 +147,7 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 			logger.Errorf("Create mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "Create mutating webhook configuration succeed.")
+		logger.Info("Create mutating webhook configuration succeed.")
 		return nil
 	}
 
@@ -172,7 +172,7 @@ func createOrUpdateWebhook(ctx context.Context, clientset kubernetes.Interface, 
 			logger.Errorf("Update mutating webhook configuration failed. error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "Update mutating webhook configuration succeed.")
+		logger.Info("Update mutating webhook configuration succeed.")
 	}
 	return nil
 }
@@ -279,13 +279,13 @@ func getMutatingWebhookConfigFromConfigmap(ctx context.Context, clientset kubern
 	}
 	var labels map[string]string
 	if !isKubeSystemNamespaceBlocked {
-		logger.Info(ctx, "kube-system is unblocked.")
+		logger.Info("kube-system is unblocked.")
 		labels = map[string]string{
 			consts.ManagedLabelKey:                consts.ManagedLabelValue,
 			consts.AdmissionEnforcerDisabledLabel: consts.AdmissionEnforcerDisabledValue,
 		}
 	} else {
-		logger.Info(ctx, "kube-system is blocked.")
+		logger.Info("kube-system is blocked.")
 		labels = map[string]string{
 			consts.ManagedLabelKey: consts.ManagedLabelValue,
 		}
@@ -368,7 +368,7 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 			logger.Errorf("cleanupSecretAndWebhook error: %s", *cerr)
 			return cerr
 		}
-		logger.Info(ctx, "WebhookTlsManager is disabled. cleanup succeed.")
+		logger.Info("WebhookTlsManager is disabled. cleanup succeed.")
 		return nil
 	}
 
@@ -395,7 +395,7 @@ func (r *webhookTlsManagerReconciler) reconcileOnce(ctx context.Context) *error 
 
 func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 	logger := log.MustGetLogger(ctx)
-	logger.Info(ctx, "Start reconciling webhook.")
+	logger.Info("Start reconciling webhook.")
 	currentTime := time.Now()
 	var cerr *error
 
@@ -407,10 +407,10 @@ func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 		}
 		cerr = r.reconcileOnce(ctx)
 		if cerr == nil {
-			logger.Info(ctx, "Reconcile webhook succeed.")
+			logger.Info("Reconcile webhook succeed.")
 			return nil
 		}
-		logger.Errorf("reconcileOnce failed. error: %s", *cerr)
+		logger.Warningf("reconcileOnce failed. error: %s", *cerr)
 		time.Sleep(retryInterval)
 	}
 	logger.Error("Reconcile webhook succeed.")
