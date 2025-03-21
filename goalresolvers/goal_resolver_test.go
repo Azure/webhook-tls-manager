@@ -12,7 +12,6 @@ import (
 	"github.com/Azure/webhook-tls-manager/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +23,7 @@ import (
 var _ = Describe("shouldRotateCert", func() {
 	var (
 		fakeClientset *fake.Clientset
-		ctx           = log.WithLogger(context.Background(), log.NewLogger(context.Background(), 3))
+		ctx           = log.NewLogger(3).WithLogger(context.Background())
 	)
 
 	BeforeEach(func() {
@@ -93,13 +92,11 @@ var _ = Describe("generateCertificates", func() {
 
 	var (
 		ctx           context.Context
-		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
 	)
 
 	BeforeEach(func() {
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.Background(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.Background())
 		fakeClientset = fake.NewSimpleClientset()
 		config.NewConfig()
 	})
@@ -119,13 +116,11 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 
 	var (
 		ctx           context.Context
-		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
 	)
 
 	BeforeEach(func() {
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.Background(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.Background())
 		fakeClientset = fake.NewSimpleClientset()
 		config.NewConfig()
 	})

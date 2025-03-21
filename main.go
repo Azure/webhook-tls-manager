@@ -34,21 +34,21 @@ func main() {
 	flag.Parse()
 	config.NewConfig()
 	config.UpdateConfig(*objectName, *caValidityYears, *serverValidityYears, *namespace)
-	logger := log.NewLogger(context.Background(), *logLevel)
-	ctx := log.WithLogger(context.TODO(), logger)
+	logger := log.NewLogger(*logLevel)
+	ctx := logger.WithLogger(context.TODO())
 	var label prometheus.Labels
 	if *webhookTlsManagerEnabled {
-		logger.Info("AKS Webhook TLS Manager Reconciliation Job")
+		logger.Info(ctx, "AKS Webhook TLS Manager Reconciliation Job")
 		label = prometheus.Labels{"job": consts.ReconciliationJob}
 	} else {
-		logger.Info("AKS Webhook TLS Manager Cleanup Job")
+		logger.Info(ctx, "AKS Webhook TLS Manager Cleanup Job")
 		label = prometheus.Labels{"job": consts.CleanupJob}
 	}
 	kubeClient := getKubeClientFunc()
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		if err := http.ListenAndServe(addr, nil); err != nil {
-			logger.Errorf("failed to start http server: %s", err)
+			logger.Errorf(ctx, "failed to start http server: %s", err)
 		}
 	}()
 
@@ -57,7 +57,7 @@ func main() {
 
 	cerr := webhookTlsManagerReconciler.Reconcile(ctx)
 	if cerr != nil {
-		logger.Errorf("WebhookTlsManagerReconciler failed. error: %s", *cerr)
+		logger.Errorf(ctx, "WebhookTlsManagerReconciler failed. error: %s", *cerr)
 		metrics.ResultMetric.With(label).Set(1)
 		os.Exit(1)
 	}
