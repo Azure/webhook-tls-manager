@@ -2,6 +2,7 @@ package certificates
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,19 +13,20 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/Azure/webhook-tls-manager/toolkit/log"
 )
 
 // IsPEMCertificateExpired check if a pem certificate expired
-func IsPEMCertificateExpired(logger *logrus.Entry, encodedCert, certName string, expirationTime time.Time) (bool, error) {
+func IsPEMCertificateExpired(ctx context.Context, encodedCert, certName string, expirationTime time.Time) (bool, error) {
+	logger := log.MustGetLogger(ctx)
 	if encodedCert == "" {
-		logger.Errorf("cert is empty")
+		logger.Errorf(ctx, "cert is empty")
 		return false, fmt.Errorf("empty cert of %s", certName)
 	}
 
 	block, leftover := pem.Decode([]byte(encodedCert))
 	if len(leftover) > 0 {
-		logger.Warningf("leftover string in cert of %s", certName)
+		logger.Warningf(ctx, "leftover string in cert of %s", certName)
 	}
 
 	if block == nil || len(block.Bytes) < 1 {
@@ -36,7 +38,7 @@ func IsPEMCertificateExpired(logger *logrus.Entry, encodedCert, certName string,
 		return false, fmt.Errorf("failed to parse cert of %s, error: %s", certName, err)
 	}
 
-	logger.Infof("cert.NotAfter: %s", cert.NotAfter.String())
+	logger.Infof(ctx, "cert.NotAfter: %s", cert.NotAfter.String())
 	if cert.NotAfter.Before(expirationTime) {
 		return true, nil
 	}

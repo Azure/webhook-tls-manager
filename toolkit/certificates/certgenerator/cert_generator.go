@@ -35,13 +35,13 @@ func (c *certificateGeneratorImp) CreateSelfSignedCertificateKeyPair(ctx context
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, KeySize)
 	if err != nil {
-		logger.Errorf("rsa.GenerateKeyfailed: %s", err)
+		logger.Errorf(ctx, "rsa.GenerateKeyfailed: %s", err)
 		return nil, nil, retry.NewError(true, err)
 	}
 
 	certificate, rerr := c.certCreator.CreateCertificateWithPublicKey(ctx, csr, &privateKey.PublicKey, csr, privateKey)
 	if rerr != nil {
-		logger.Errorf("createCertificate failed: %+v", rerr)
+		logger.Errorf(ctx, "createCertificate failed: %+v", rerr)
 		return nil, nil, rerr
 	}
 
@@ -57,13 +57,13 @@ func (c *certificateGeneratorImp) CreateCertificateKeyPair(ctx context.Context, 
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, KeySize)
 	if err != nil {
-		logger.Errorf("rsa.GenerateKey failed: %s", err)
+		logger.Errorf(ctx, "rsa.GenerateKey failed: %s", err)
 		return nil, nil, retry.NewError(true, err)
 	}
 
 	certificate, rerr := c.certCreator.CreateCertificateWithPublicKey(ctx, csr, &privateKey.PublicKey, caCert, caKey)
 	if rerr != nil {
-		logger.Errorf("createCertificate failed: %+v", rerr)
+		logger.Errorf(ctx, "createCertificate failed: %+v", rerr)
 		return nil, nil, rerr
 	}
 

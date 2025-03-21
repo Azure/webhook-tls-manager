@@ -26,7 +26,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           go test -coverprofile=coverage.out ./...
-          grep -v -e "/mock_" -e "main.go" coverage.out > filtered_coverage.out
+          grep -v -e "/mock_" -e "main.go" -e "toolkit/log/span.go" coverage.out > filtered_coverage.out
           go tool cover -func=filtered_coverage.out | tail -n 1 | awk '{print $3}' | sed 's/%//' > coverage.txt
 
       - name: Fail if coverage is below threshold

@@ -43,33 +43,33 @@ type webhookTlsManagerGoalResolver struct {
 func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (bool, *error) {
 
 	logger := log.MustGetLogger(ctx)
-	logger.Infof("config is %v", config.AppConfig)
+	logger.Infof(ctx, "config is %v", config.AppConfig)
 
 	secret, getErr := g.kubeClient.CoreV1().Secrets(config.AppConfig.Namespace).Get(ctx, utils.SecretName(), metav1.GetOptions{})
 	if k8serrors.IsNotFound(getErr) {
-		logger.Infof("secret %s not exists", utils.SecretName())
+		logger.Infof(ctx, "secret %s not exists", utils.SecretName())
 		return true, nil
 	}
 	if getErr != nil {
-		logger.Errorf("get secret %s failed. error: %s", utils.SecretName(), getErr)
+		logger.Errorf(ctx, "get secret %s failed. error: %s", utils.SecretName(), getErr)
 		return false, &getErr
 	}
-	logger.Infof("secret %s exists", utils.SecretName())
+	logger.Infof(ctx, "secret %s exists", utils.SecretName())
 	if v, exist := secret.ObjectMeta.Labels[consts.ManagedLabelKey]; exist && v == consts.ManagedLabelValue {
-		logger.Infof("found secret %s managed by aks. checking expiration date.", utils.SecretName())
-		expired, err := certificates.IsPEMCertificateExpired(logger, string(secret.Data["serverCert.pem"]), utils.SecretName(), time.Now().AddDate(0, 1, 0))
+		logger.Infof(ctx, "found secret %s managed by aks. checking expiration date.", utils.SecretName())
+		expired, err := certificates.IsPEMCertificateExpired(ctx, string(secret.Data["serverCert.pem"]), utils.SecretName(), time.Now().AddDate(0, 1, 0))
 		if err != nil {
-			logger.Errorf("failed to check cert %s. error: %s", utils.SecretName(), err)
+			logger.Errorf(ctx, "failed to check cert %s. error: %s", utils.SecretName(), err)
 			return false, &err
 		}
 		if expired {
-			logger.Infof("cert expired.")
+			logger.Infof(ctx, "cert expired.")
 			return true, nil
 		}
-		logger.Infof("cert valid.")
+		logger.Infof(ctx, "cert valid.")
 		return false, nil
 	}
-	logger.Warningf("found secret %s is not managed by AKS.", utils.SecretName())
+	logger.Warningf(ctx, "found secret %s is not managed by AKS.", utils.SecretName())
 	return false, nil
 }
 
@@ -90,7 +90,7 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 
 	caCert, caCertPem, caKey, caKeyPem, rerr := g.certOperator.CreateSelfSignedCertificateKeyPair(ctx, caCsr)
 	if rerr != nil {
-		logger.Errorf("generateCertificates generate ca certs and key failed: %s", rerr.Error())
+		logger.Errorf(ctx, "generateCertificates generate ca certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
@@ -110,11 +110,11 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 
 	serverCertPem, serverKeyPem, rerr := g.certOperator.CreateCertificateKeyPair(ctx, serverCsr, caCert, caKey)
 	if rerr != nil {
-		logger.Errorf("generateCertificates generate server certs and key failed: %s", rerr.Error())
+		logger.Errorf(ctx, "generateCertificates generate server certs and key failed: %s", rerr.Error())
 		return &CertificateData{}, &rerr.RawError
 	}
 
-	logger.Info("new cert generated")
+	logger.Info(ctx, "new cert generated")
 	return &CertificateData{
 		CaCertPem:     []byte(caCertPem),
 		CaKeyPem:      []byte(caKeyPem),
@@ -125,7 +125,7 @@ func (g *webhookTlsManagerGoalResolver) generateCertificates(ctx context.Context
 
 func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes.Interface, isKubeSystemNamespaceBlocked bool, IsWebhookTlsManagerEnabled bool) WebhookTlsManagerGoalResolverInterface {
 	logger := log.MustGetLogger(ctx)
-	logger.Infof("NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", isKubeSystemNamespaceBlocked, IsWebhookTlsManagerEnabled)
+	logger.Infof(ctx, "NewWebhookTlsManagerGoalResolver: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", isKubeSystemNamespaceBlocked, IsWebhookTlsManagerEnabled)
 	generator := certgenerator.NewCertGenerator(certcreator.NewCertCreator())
 	operator := certoperator.NewCertOperator(generator)
 	return &webhookTlsManagerGoalResolver{
@@ -138,7 +138,7 @@ func NewWebhookTlsManagerGoalResolver(ctx context.Context, kubeClient kubernetes
 
 func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTlsManagerGoal, *error) {
 	logger := log.MustGetLogger(ctx)
-	logger.Infof("Resolve: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", g.isKubeSystemNamespaceBlocked, g.IsWebhookTlsManagerEnabled)
+	logger.Infof(ctx, "Resolve: isKubeSystemNamespaceBlocked=%v, IsWebhookTlsManagerEnabled=%v", g.isKubeSystemNamespaceBlocked, g.IsWebhookTlsManagerEnabled)
 	goal := &WebhookTlsManagerGoal{
 		IsKubeSystemNamespaceBlocked: g.isKubeSystemNamespaceBlocked,
 		IsWebhookTlsManagerEnabled:   g.IsWebhookTlsManagerEnabled,
@@ -146,16 +146,16 @@ func (g *webhookTlsManagerGoalResolver) Resolve(ctx context.Context) (*WebhookTl
 
 	rotateCert, cerr := g.shouldRotateCert(ctx)
 	if cerr != nil {
-		logger.Errorf("Failed to check cert expiration date. error: %s", *cerr)
+		logger.Errorf(ctx, "Failed to check cert expiration date. error: %s", *cerr)
 		return nil, cerr
 	}
 	if !rotateCert {
-		logger.Info("no need to rotate cert.")
+		logger.Info(ctx, "no need to rotate cert.")
 		goal.CertData = nil
 	} else {
 		data, cerr := g.generateCertificates(ctx)
 		if cerr != nil {
-			logger.Errorf("generateCertificates. error: %s", *cerr)
+			logger.Errorf(ctx, "generateCertificates. error: %s", *cerr)
 			return nil, cerr
 		}
 		goal.CertData = data

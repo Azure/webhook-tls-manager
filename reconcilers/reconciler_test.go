@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	"github.com/sirupsen/logrus"
 	admissionregistration "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +34,6 @@ const (
 var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
 	var (
 		ctx                        context.Context
-		logger                     *logrus.Entry
 		currentWebhookConfig       *admissionregistration.MutatingWebhookConfiguration
 		webhookConfigFromConfigmap *admissionregistration.MutatingWebhookConfiguration
 		currentMutatingWebhooks    []admissionregistration.MutatingWebhook
@@ -44,8 +42,7 @@ var _ = Describe("currentWebhookConfigAndConfigmapDifferent", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.Background(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.Background())
 		currentMutatingWebhooks = []admissionregistration.MutatingWebhook{
 			{
 				Name: "vpa.k8s.io",
@@ -136,7 +133,6 @@ var _ = Describe("shouldUpdateWebhook", func() {
 
 	var (
 		ctx     context.Context
-		logger  *logrus.Entry
 		webhook *admissionregistration.MutatingWebhookConfiguration
 		client  *fake.Clientset
 		s       *corev1.Secret
@@ -144,8 +140,7 @@ var _ = Describe("shouldUpdateWebhook", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.Background(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.Background())
 		s = secret(config.AppConfig.Namespace)
 		client = fake.NewSimpleClientset(s, prepareCM(config.AppConfig.Namespace))
 	})
@@ -184,9 +179,8 @@ var _ = Describe("createOrUpdateSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		logger = log.NewLogger(context.Background(), 3)
-		ctx    = log.WithLogger(context.TODO(), logger)
-		s      *corev1.Secret
+		ctx = log.NewLogger(3).WithLogger(context.Background())
+		s   *corev1.Secret
 	)
 
 	BeforeEach(func() {
@@ -247,14 +241,12 @@ var _ = Describe("createOrUpdateWebhook", func() {
 
 	var (
 		ctx    context.Context
-		logger *logrus.Entry
 		client *fake.Clientset
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.TODO(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.Background())
 		client = fake.NewSimpleClientset(secret(config.AppConfig.Namespace), prepareCM(config.AppConfig.Namespace))
 	})
 
@@ -324,14 +316,12 @@ var _ = Describe("createOrUpdateWebhook", func() {
 var _ = Describe("cleanupSecretAndWebhook", func() {
 	var (
 		ctx           context.Context
-		logger        *logrus.Entry
 		fakeClientset *fake.Clientset
 	)
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.TODO(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.TODO())
 		fakeClientset = fake.NewSimpleClientset(prepareCM(config.AppConfig.Namespace))
 	})
 
@@ -365,7 +355,7 @@ var _ = Describe("createTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
+		ctx = log.NewLogger(3).WithLogger(context.TODO())
 	)
 
 	BeforeEach(func() {
@@ -400,7 +390,7 @@ var _ = Describe("updateTlsSecret", func() {
 			ServerCertPem: []byte("serverCertPem"),
 			ServerKeyPem:  []byte("serverKeyPem"),
 		}
-		ctx = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
+		ctx = log.NewLogger(3).WithLogger(context.TODO())
 		s   *corev1.Secret
 	)
 
@@ -433,7 +423,7 @@ var _ = Describe("getMutatingWebhookConfigFromConfigmap", func() {
 	var (
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
+		ctx           = log.NewLogger(3).WithLogger(context.TODO())
 	)
 
 	BeforeEach(func() {
@@ -470,7 +460,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 	var (
 		fakeClientset *fake.Clientset
 		caCertPem     = []byte("caCert")
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
+		ctx           = log.NewLogger(3).WithLogger(context.TODO())
 	)
 
 	BeforeEach(func() {
@@ -532,7 +522,7 @@ var _ = Describe("createMutatingWebhookConfig test", func() {
 var _ = Describe("updateMutatingWebhookConfig test", func() {
 	var (
 		fakeClientset *fake.Clientset
-		ctx           = log.WithLogger(context.TODO(), log.NewLogger(context.Background(), 3))
+		ctx           = log.NewLogger(3).WithLogger(context.TODO())
 		webhook       *admissionregistration.MutatingWebhookConfiguration
 	)
 
@@ -582,7 +572,6 @@ var _ = Describe("updateMutatingWebhookConfig test", func() {
 var _ = Describe("webhook tls manager reconciler reconcile", func() {
 	var (
 		ctx          context.Context
-		logger       *logrus.Entry
 		client       *fake.Clientset
 		mockctl      *gomock.Controller
 		goalresolver *mock_goal_resolvers.MockWebhookTlsManagerGoalResolverInterface
@@ -591,8 +580,7 @@ var _ = Describe("webhook tls manager reconciler reconcile", func() {
 
 	BeforeEach(func() {
 		config.NewConfig()
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.TODO(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.TODO())
 		mockctl = gomock.NewController(GinkgoT())
 		client = fake.NewSimpleClientset(prepareCM(config.AppConfig.Namespace))
 		goalresolver = mock_goal_resolvers.NewMockWebhookTlsManagerGoalResolverInterface(mockctl)
