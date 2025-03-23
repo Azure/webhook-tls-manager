@@ -26,7 +26,7 @@ var encodeFunc = pem.Encode
 func (o *certOperatorImp) pemToPrivateKey(ctx context.Context, raw string) (*rsa.PrivateKey, error) {
 	kpb, _ := pem.Decode([]byte(raw))
 	if kpb == nil {
-		log.MustGetLogger(ctx).Errorf("Decode returns nil")
+		log.MustGetLogger(ctx).Errorf(ctx, "Decode returns nil")
 		return nil, errors.New("The raw pem is not a valid PEM formatted block")
 	}
 	return x509.ParsePKCS1PrivateKey(kpb.Bytes)
@@ -38,22 +38,22 @@ func (o *certOperatorImp) CreateSelfSignedCertificateKeyPair(
 
 	cert, key, rerr := o.certGenerator.CreateSelfSignedCertificateKeyPair(ctx, csr)
 	if rerr != nil {
-		log.MustGetLogger(ctx).Errorf("CreateSelfSignedCertificateKeyPair failed: %v", rerr)
+		log.MustGetLogger(ctx).Errorf(ctx, "CreateSelfSignedCertificateKeyPair failed: %v", rerr)
 		return nil, "", nil, "", rerr
 	}
 	certPem, keyPem, err := o.getCertKeyAsPem(ctx, cert, key)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("certKeyToPem failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "certKeyToPem failed: %s", err)
 		return nil, "", nil, "", retry.NewError(false, err)
 	}
-	log.MustGetLogger(ctx).Infof("self signed certificate '%v' is generated successfully", csr.Subject.CommonName)
+	log.MustGetLogger(ctx).Infof(ctx, "self signed certificate '%v' is generated successfully", csr.Subject.CommonName)
 	return cert, certPem, key, keyPem, nil
 }
 
 func (o *certOperatorImp) pemToCertificate(ctx context.Context, raw string) (*x509.Certificate, error) {
 	cpb, _ := pem.Decode([]byte(raw))
 	if cpb == nil {
-		log.MustGetLogger(ctx).Errorf("Decode returns nil")
+		log.MustGetLogger(ctx).Errorf(ctx, "Decode returns nil")
 		return nil, errors.New("The raw pem is not a valid PEM formatted block")
 	}
 	return x509.ParseCertificate(cpb.Bytes)
@@ -68,7 +68,7 @@ func (o *certOperatorImp) certificateToPem(ctx context.Context, cert *x509.Certi
 	pemBuffer := bytes.Buffer{}
 	err := encodeFunc(&pemBuffer, pemBlock)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("pem encode() return error %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "pem encode() return error %s", err)
 		return nil, err
 	}
 
@@ -83,7 +83,7 @@ func (o *certOperatorImp) privateKeyToPem(ctx context.Context, privateKey *rsa.P
 	pemBuffer := bytes.Buffer{}
 	err := encodeFunc(&pemBuffer, pemBlock)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("pem encode() return error %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "pem encode() return error %s", err)
 		return nil, err
 	}
 
@@ -97,15 +97,15 @@ func (o *certOperatorImp) CreateCertificateKeyPair(
 	caKey *rsa.PrivateKey) (string, string, *retry.Error) {
 	cert, key, rerr := o.certGenerator.CreateCertificateKeyPair(ctx, csr, caCert, caKey)
 	if rerr != nil {
-		log.MustGetLogger(ctx).Errorf("CreateCertificateKeyPair failed: %v", rerr)
+		log.MustGetLogger(ctx).Errorf(ctx, "CreateCertificateKeyPair failed: %v", rerr)
 		return "", "", rerr
 	}
 	certPem, keyPem, err := o.getCertKeyAsPem(ctx, cert, key)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("getCertKeyAsPem failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "getCertKeyAsPem failed: %s", err)
 		return "", "", retry.NewError(false, err)
 	}
-	log.MustGetLogger(ctx).Infof("certificate %v is generated successfully", csr.Subject.CommonName)
+	log.MustGetLogger(ctx).Infof(ctx, "certificate %v is generated successfully", csr.Subject.CommonName)
 	return certPem, keyPem, nil
 }
 
@@ -117,22 +117,22 @@ func (o *certOperatorImp) CreateCertificate(
 	caKey *rsa.PrivateKey) (string, *retry.Error) {
 	key, err := o.pemToPrivateKey(ctx, keyPem)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("PemToPrivateKey failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "PemToPrivateKey failed: %s", err)
 		return "", retry.NewError(false, err)
 	}
 
 	cert, rerr := o.certGenerator.CreateCertificate(ctx, csr, key, caCert, caKey)
 	if rerr != nil {
-		log.MustGetLogger(ctx).Errorf("CreateCertificate failed: %v", rerr)
+		log.MustGetLogger(ctx).Errorf(ctx, "CreateCertificate failed: %v", rerr)
 		return "", rerr
 	}
 
 	certBytes, err := o.certificateToPem(ctx, cert)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("CertificateToPem failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "CertificateToPem failed: %s", err)
 		return "", retry.NewError(false, err)
 	}
-	log.MustGetLogger(ctx).Infof("certificate %v is generated successfully", csr.Subject.CommonName)
+	log.MustGetLogger(ctx).Infof(ctx, "certificate %v is generated successfully", csr.Subject.CommonName)
 	return string(certBytes), nil
 }
 
@@ -142,13 +142,13 @@ func (o *certOperatorImp) getCertKeyAsPem(
 	key *rsa.PrivateKey) (string, string, error) {
 	certBytes, err := o.certificateToPem(ctx, cert)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("CertificateToPem failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "CertificateToPem failed: %s", err)
 		return "", "", err
 	}
 
 	keyBytes, err := o.privateKeyToPem(ctx, key)
 	if err != nil {
-		log.MustGetLogger(ctx).Errorf("PrivateKeyToPem failed: %s", err)
+		log.MustGetLogger(ctx).Errorf(ctx, "PrivateKeyToPem failed: %s", err)
 		return "", "", err
 	}
 

@@ -14,14 +14,12 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"k8s.io/legacy-cloud-providers/azure/retry"
 )
 
 var _ = Describe("CertGenerator", func() {
 	var (
 		ctx             context.Context
-		logger          *logrus.Entry
 		mockCertCreator *mock_cert_creator.MockCertCreator
 		mockCtrl        *gomock.Controller
 		certGenerator   CertGenerator
@@ -31,8 +29,7 @@ var _ = Describe("CertGenerator", func() {
 		mockCtrl = gomock.NewController(GinkgoT())
 		mockCertCreator = mock_cert_creator.NewMockCertCreator(mockCtrl)
 		certGenerator = NewCertGenerator(mockCertCreator)
-		logger = log.NewLogger(context.Background(), 3)
-		ctx = log.WithLogger(context.Background(), logger)
+		ctx = log.NewLogger(3).WithLogger(context.TODO())
 	})
 	Describe("CreateSelfSignedCertificateKeyPair", func() {
 		It("CreateSelfSignedCertificateKeyPair nil certificate input", func() {
