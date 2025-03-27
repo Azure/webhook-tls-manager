@@ -2,7 +2,7 @@ FROM golang:1.23.3 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
-COPY vendor/ vendor/  # Ensure vendored dependencies are available
+COPY vendor/ vendor/
 
 # Force using the installed Go version (1.23.3) instead of fetching 1.23.7
 ENV GOTOOLCHAIN=local
