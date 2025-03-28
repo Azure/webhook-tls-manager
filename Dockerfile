@@ -4,6 +4,9 @@ FROM golang:1.23.3 AS build-stage
 COPY go.mod go.sum ./
 COPY vendor/ vendor/
 
+# Set working directory
+WORKDIR /app
+
 # Force using the installed Go version (1.23.3) instead of fetching 1.23.7
 ENV GOTOOLCHAIN=local
 
@@ -15,6 +18,6 @@ RUN CGO_ENABLED=0 go build -mod=vendor -o webhook-tls-manager main.go
 
 # Minimal final image (scratch for smallest size)
 FROM scratch
-COPY --from=build-stage /webhook-tls-manager /
+COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]
