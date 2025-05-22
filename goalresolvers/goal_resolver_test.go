@@ -9,7 +9,6 @@ import (
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
-	"github.com/Azure/webhook-tls-manager/utils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -74,7 +73,7 @@ var _ = Describe("shouldRotateCert", func() {
 				APIVersion: "v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      utils.SecretName(),
+				Name:      config.SecretName(),
 				Namespace: config.AppConfig.Namespace,
 			},
 			Data: map[string][]byte{},
@@ -161,7 +160,7 @@ func generateSecret(cert string, namespace string) *corev1.Secret {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      utils.SecretName(),
+			Name:      config.SecretName(),
 			Namespace: namespace,
 			Labels: map[string]string{
 				consts.ManagedLabelKey: consts.ManagedLabelValue,

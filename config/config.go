@@ -36,3 +36,27 @@ func UpdateConfig(objectName string, caValidityYears int, serverValidityYears in
 		AppConfig.Namespace = namespace
 	}
 }
+
+func SecretName() string {
+	return AppConfig.ObjectName + "-tls-certs"
+}
+
+func WebhookConfigName() string {
+	return AppConfig.ObjectName + "-webhook-config"
+}
+
+func ServiceName() string {
+	return AppConfig.ObjectName + "-webhook"
+}
+
+func CACertificateCommonName() string {
+	return AppConfig.ObjectName + "_webhook_ca"
+}
+
+func ServerCertificateCommonName() string {
+	return AppConfig.ObjectName + "-webhook." + AppConfig.Namespace + ".svc"
+}
+
+func MetricsPrefix() string {
+	return AppConfig.ObjectName + "_metrics"
+}
