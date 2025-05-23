@@ -31,13 +31,6 @@ jobs:
           go test -coverprofile=coverage.out ./...
           grep -v -e "/mock_" -e "main.go" -e "/toolkit/log/" -e "/toolkit/certificates/certoperator/" coverage.out > filtered_coverage.out
           go tool cover -func=filtered_coverage.out | tail -n 1 | awk '{print $3}' | sed 's/%//' > coverage.txt
-      
-      - name: Copy coverage to workspace for local debugging
-        run: |
-          mkdir -p /github/workspace/coverage-out
-          cp coverage.out filtered_coverage.out coverage.txt /github/workspace/coverage-out/
-          cp filtered_coverage.out /github/workspace/
-          cp coverage.txt /github/workspace/
 
       - name: Fail if coverage is below threshold
         id: check_coverage
