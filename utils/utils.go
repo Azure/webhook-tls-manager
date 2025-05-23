@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"github.com/Azure/webhook-tls-manager/config"
 	"k8s.io/autoscaler/vertical-pod-autoscaler/common"
 	"k8s.io/client-go/kubernetes"
 )
@@ -17,28 +16,4 @@ func GetKubeClient() kubernetes.Interface {
 	kubeClient := kubernetes.NewForConfigOrDie(config)
 	var clientInterface kubernetes.Interface = kubeClient
 	return clientInterface
-}
-
-func SecretName() string {
-	return config.AppConfig.ObjectName + "-tls-certs"
-}
-
-func WebhookConfigName() string {
-	return config.AppConfig.ObjectName + "-webhook-config"
-}
-
-func ServiceName() string {
-	return config.AppConfig.ObjectName + "-webhook"
-}
-
-func CACertificateCommonName() string {
-	return config.AppConfig.ObjectName + "_webhook_ca"
-}
-
-func ServerCertificateCommonName() string {
-	return config.AppConfig.ObjectName + "-webhook." + config.AppConfig.Namespace + ".svc"
-}
-
-func MetricsPrefix() string {
-	return config.AppConfig.ObjectName + "_metrics"
 }
