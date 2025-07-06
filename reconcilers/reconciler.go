@@ -412,6 +412,6 @@ func (r *webhookTlsManagerReconciler) Reconcile(ctx context.Context) *error {
 		logger.Warningf(ctx, "reconcileOnce failed. error: %s", *cerr)
 		time.Sleep(retryInterval)
 	}
-	logger.Error(ctx, "Reconcile webhook succeed.")
+	logger.Errorf(ctx, "Reconcile webhook failed. error: %s", *cerr)
 	return cerr
 }
