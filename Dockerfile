@@ -1,4 +1,4 @@
-FROM golang:1.24.4 AS build-stage
+FROM golang:1.24.6 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
@@ -7,7 +7,7 @@ COPY vendor/ vendor/
 # Set working directory
 WORKDIR /app
 
-# Force using the installed Go version (1.23.3) instead of fetching 1.23.7
+# Force using the installed Go version (1.24.6) instead of fetching the one in go.mod
 ENV GOTOOLCHAIN=local
 
 # Copy the entire source code
