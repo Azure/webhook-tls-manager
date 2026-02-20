@@ -1,4 +1,4 @@
-FROM golang:1.24.11 AS build-stage
+FROM golang:1.24.13 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
