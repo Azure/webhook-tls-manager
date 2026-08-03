@@ -15,6 +15,19 @@ export TAG=0.0.1
 make docker-build
 ```
 
+The image is built with the Microsoft build of Go so that Go crypto calls are routed to the
+platform's FIPS-validated OpenSSL. This requires `CGO_ENABLED=1` and a base image that ships
+OpenSSL, so the binary is dynamically linked and cannot run on a `scratch` base. FIPS mode itself
+is detected at runtime from the host, so the same image runs on FIPS and non-FIPS clusters.
+
+Certificates use RSA-3072. The OpenSSL backend only implements RSA key generation for 2048 and
+3072 bits, and certificates found with any other key size are rotated automatically.
+
+To run the tests against the same crypto backend the released image uses:
+```
+make test-fips
+```
+
 ### Deploy charts through helm
 Check out the `examples` folder for sample configurations and deployment files. The command uses helm to install a helm release. The configmap containing the mutating webhook configuration is in sample-cm.yaml. The `vpa-cert-webhook-check job` will create a secret with the certificate named as `vpa-tls-certs` and MutatingWebhookConfiguration `vpa-webhook-config`.
 
