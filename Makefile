@@ -4,7 +4,8 @@ endif
 
 IMAGE_VERSION ?= $(TAG)
 
-GO_FIPS_IMAGE ?= mcr.microsoft.com/oss/go/microsoft/golang:1.25-azurelinux3.0
+# Must match the Dockerfile build stage so CI tests the toolchain that ships the image.
+GO_FIPS_IMAGE ?= mcr.microsoft.com/oss/go/microsoft/golang:1.25.12-azurelinux3.0
 
 .PHONY: docker-build
 docker-build:
