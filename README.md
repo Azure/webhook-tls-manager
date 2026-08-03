@@ -20,8 +20,9 @@ platform's FIPS-validated OpenSSL. This requires `CGO_ENABLED=1` and a base imag
 OpenSSL, so the binary is dynamically linked and cannot run on a `scratch` base. FIPS mode itself
 is detected at runtime from the host, so the same image runs on FIPS and non-FIPS clusters.
 
-Certificates use RSA-3072. The OpenSSL backend only implements RSA key generation for 2048 and
-3072 bits, and certificates found with any other key size are rotated automatically.
+Certificates keep using RSA-4096. The OpenSSL backend generates 2048, 3072 and 4096 bit RSA keys
+itself (see `crypto/rsa.GenerateKey` in the Microsoft build of Go), so no key size change is
+needed for FIPS and existing certificates do not have to be rotated.
 
 To run the tests against the same crypto backend the released image uses:
 ```

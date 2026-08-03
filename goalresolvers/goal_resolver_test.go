@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/webhook-tls-manager/config"
 	"github.com/Azure/webhook-tls-manager/consts"
 	"github.com/Azure/webhook-tls-manager/toolkit/certificates"
-	"github.com/Azure/webhook-tls-manager/toolkit/certificates/certgenerator"
 	"github.com/Azure/webhook-tls-manager/toolkit/log"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -48,7 +47,7 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 
 	It("cert expired", func() {
-		expiredCert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour*24*15), certgenerator.KeySize)
+		expiredCert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 15))
 		secret := generateSecret(expiredCert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
 		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
@@ -58,23 +57,13 @@ var _ = Describe("shouldRotateCert", func() {
 	})
 
 	It("cert unexpired", func() {
-		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour*24*60), certgenerator.KeySize)
+		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
 		secret := generateSecret(cert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
 		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
 		res, err := resolver.shouldRotateCert(ctx)
 		Expect(err).To(BeNil())
 		Expect(res).To(BeFalse())
-	})
-
-	It("unexpired cert with a pre-FIPS key size is rotated", func() {
-		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour*24*60), 4096)
-		secret := generateSecret(cert, config.AppConfig.Namespace)
-		fakeClientset = fake.NewSimpleClientset(secret)
-		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true).(*webhookTlsManagerGoalResolver)
-		res, err := resolver.shouldRotateCert(ctx)
-		Expect(err).To(BeNil())
-		Expect(res).To(BeTrue())
 	})
 
 	It("secret is not managed by aks", func() {
@@ -146,7 +135,7 @@ var _ = Describe("webhook tls manager goal resolver", func() {
 	})
 
 	It("resolve succeed: don't rotate cert", func() {
-		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour*24*60), certgenerator.KeySize)
+		cert, _ := certificates.GetPEMCertificateString(time.Now().Add(time.Hour * 24 * 60))
 		secret := generateSecret(cert, config.AppConfig.Namespace)
 		fakeClientset = fake.NewSimpleClientset(secret)
 		resolver := NewWebhookTlsManagerGoalResolver(ctx, fakeClientset, false, true)

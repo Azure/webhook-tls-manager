@@ -65,16 +65,6 @@ func (g *webhookTlsManagerGoalResolver) shouldRotateCert(ctx context.Context) (b
 			logger.Infof(ctx, "cert expired.")
 			return true, nil
 		}
-		keySize, err := certificates.PEMCertificateRSAKeySize(string(secret.Data["serverCert.pem"]), config.SecretName())
-		if err != nil {
-			logger.Errorf(ctx, "failed to check key size of cert %s. error: %s", config.SecretName(), err)
-			return false, &err
-		}
-		// Certificates issued before the FIPS migration use a key size OpenSSL cannot sign with.
-		if keySize != certgenerator.KeySize {
-			logger.Infof(ctx, "cert key size %d is not %d. rotating.", keySize, certgenerator.KeySize)
-			return true, nil
-		}
 		logger.Infof(ctx, "cert valid.")
 		return false, nil
 	}

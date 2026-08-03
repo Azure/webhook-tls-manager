@@ -13,9 +13,7 @@ import (
 )
 
 const (
-	// The OpenSSL FIPS backend only implements RSA key generation for 2048 and 3072 bits;
-	// any other size silently falls back to non-FIPS Go crypto.
-	KeySize = 3072
+	KeySize = 4096
 )
 
 type certificateGeneratorImp struct {
