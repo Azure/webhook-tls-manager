@@ -3,9 +3,8 @@ package certificates
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -46,8 +45,32 @@ func IsPEMCertificateExpired(ctx context.Context, encodedCert, certName string, 
 	return false, nil
 }
 
-func GetPEMCertificateString(expirationTime time.Time) (string, error) {
-	priv, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
+// PEMCertificateRSAKeySize returns the size in bits of the RSA public key in a pem certificate.
+func PEMCertificateRSAKeySize(encodedCert, certName string) (int, error) {
+	if encodedCert == "" {
+		return 0, fmt.Errorf("empty cert of %s", certName)
+	}
+
+	block, _ := pem.Decode([]byte(encodedCert))
+	if block == nil || len(block.Bytes) < 1 {
+		return 0, fmt.Errorf("failed to pem decode cert of %s", certName)
+	}
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse cert of %s, error: %s", certName, err)
+	}
+
+	publicKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return 0, fmt.Errorf("cert of %s does not have an RSA public key", certName)
+	}
+
+	return publicKey.N.BitLen(), nil
+}
+
+func GetPEMCertificateString(expirationTime time.Time, keySize int) (string, error) {
+	priv, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {
 		return "", err
 	}
