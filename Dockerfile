@@ -1,6 +1,6 @@
 # Microsoft build of Go: routes Go crypto through the platform's FIPS-validated OpenSSL.
 # Pinned to an exact patch tag so the compiler version is reproducible; bump deliberately.
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.12-azurelinux3.0 AS build-stage
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.25.13-azurelinux3.0 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
