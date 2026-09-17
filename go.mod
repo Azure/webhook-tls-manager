@@ -1,6 +1,6 @@
 module github.com/Azure/webhook-tls-manager
 
-go 1.25.13
+go 1.26.8
 
 require (
 	github.com/golang/mock v1.6.0
@@ -60,7 +60,7 @@ require (
 	github.com/prometheus/client_golang v1.18.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
