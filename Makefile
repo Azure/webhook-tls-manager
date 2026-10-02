@@ -10,7 +10,7 @@ GO_FIPS_IMAGE ?= $(shell awk '/^FROM .*\/golang:/ {print $$2; exit}' Dockerfile)
 
 .PHONY: docker-build
 docker-build:
-	docker buildx build --pull --platform linux/amd64,linux/arm64 --push -t $(REGISTRY):$(IMAGE_VERSION) .
+	docker buildx build --platform linux/amd64,linux/arm64 --push -t $(REGISTRY):$(IMAGE_VERSION) .
 
 # Exercises the crypto paths against the OpenSSL backend rather than Go's own crypto.
 # The build-info assertion mirrors the Dockerfile guard: without it a silently disabled
