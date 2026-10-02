@@ -26,9 +26,9 @@ RUN go version -m webhook-tls-manager | grep -q 'microsoft_systemcrypto=1'
 
 # Azure Linux provides OpenSSL 3 plus the SymCrypt FIPS provider, which the binary dlopens at
 # startup. A scratch image cannot satisfy this, and static linking to OpenSSL is not permitted.
-# Deliberately left on the rolling 3.0 tag: this is where OpenSSL ships, so it must pick up
-# CVE fixes on rebuild. The build stage is pinned; the FIPS provider surface is not.
-FROM mcr.microsoft.com/azurelinux/base/core:3.0
+# Pin the multi-architecture runtime base for reproducible builds.
+# Update this digest deliberately to pick up future runtime package security fixes.
+FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:1324a2cf7ed34e5f48a1022816b205782b86c7305651658e611dcd3d30756751
 COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]
