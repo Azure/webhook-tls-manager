@@ -28,7 +28,7 @@ RUN go version -m webhook-tls-manager | grep -q 'microsoft_systemcrypto=1'
 # startup. A scratch image cannot satisfy this, and static linking to OpenSSL is not permitted.
 # Pin the multi-architecture runtime base for reproducible builds.
 # Update this digest deliberately to pick up future runtime package security fixes.
-FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:1324a2cf7ed34e5f48a1022816b205782b86c7305651658e611dcd3d30756751
+FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:bfd3e44899fe7c17f6fda42a6ef2a322f2178c2dafb88e69fd87675cdcac39ec
 COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]
