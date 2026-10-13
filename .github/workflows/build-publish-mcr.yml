@@ -15,6 +15,7 @@ permissions:
 env:
   # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
   REGISTRY_REPO: public/aks/webhook-tls-manager
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   prepare-variables:
