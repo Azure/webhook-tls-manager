@@ -1,6 +1,6 @@
 # Microsoft build of Go: routes Go crypto through the platform's FIPS-validated OpenSSL.
 # Pinned to an exact patch tag so the compiler version is reproducible; bump deliberately.
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26.8-azurelinux3.0 AS build-stage
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26.10-azurelinux3.0 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
@@ -28,7 +28,7 @@ RUN go version -m webhook-tls-manager | grep -q 'microsoft_systemcrypto=1'
 # startup. A scratch image cannot satisfy this, and static linking to OpenSSL is not permitted.
 # Pin the multi-architecture runtime base for reproducible builds.
 # Update this digest deliberately to pick up future runtime package security fixes.
-FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:bfd3e44899fe7c17f6fda42a6ef2a322f2178c2dafb88e69fd87675cdcac39ec
+FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:bd88359666e3f20296e7fe639a480dfd3c3c8eba299b21f26e4560353e21a656
 COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]

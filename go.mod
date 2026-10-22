@@ -1,6 +1,6 @@
 module github.com/Azure/webhook-tls-manager
 
-go 1.26.8
+go 1.26.10
 
 require (
 	github.com/golang/mock v1.6.0
