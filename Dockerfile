@@ -1,6 +1,6 @@
 # Microsoft build of Go: routes Go crypto through the platform's FIPS-validated OpenSSL.
 # Pinned to an exact patch tag so the compiler version is reproducible; bump deliberately.
-FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26.10-azurelinux3.0 AS build-stage
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26.11-azurelinux3.0 AS build-stage
 
 # Copy dependencies
 COPY go.mod go.sum ./
@@ -26,9 +26,11 @@ RUN go version -m webhook-tls-manager | grep -q 'microsoft_systemcrypto=1'
 
 # Azure Linux provides OpenSSL 3 plus the SymCrypt FIPS provider, which the binary dlopens at
 # startup. A scratch image cannot satisfy this, and static linking to OpenSSL is not permitted.
+# distroless/base keeps glibc, OpenSSL, SymCrypt and the CA bundle but drops curl, krb5, zlib,
+# popt and tdnf, which the binary never uses and which carried most of the image CVEs.
 # Pin the multi-architecture runtime base for reproducible builds.
 # Update this digest deliberately to pick up future runtime package security fixes.
-FROM mcr.microsoft.com/azurelinux/base/core:3.0@sha256:bd88359666e3f20296e7fe639a480dfd3c3c8eba299b21f26e4560353e21a656
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:370fb2c55e7f0474fed019623cce6a8db65a4d70dedfca9219fc69d6c7627f89
 COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]
