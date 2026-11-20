@@ -30,7 +30,7 @@ RUN go version -m webhook-tls-manager | grep -q 'microsoft_systemcrypto=1'
 # popt and tdnf, which the binary never uses and which carried most of the image CVEs.
 # Pin the multi-architecture runtime base for reproducible builds.
 # Update this digest deliberately to pick up future runtime package security fixes.
-FROM mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:370fb2c55e7f0474fed019623cce6a8db65a4d70dedfca9219fc69d6c7627f89
+FROM mcr.microsoft.com/azurelinux/distroless/base:3.0@sha256:11ecd8f7cd1cad0e4fbb565ab98768f1a2ce35cb2730c867217baac011ae8645
 COPY --from=build-stage /app/webhook-tls-manager /
 
 ENTRYPOINT ["/webhook-tls-manager"]
